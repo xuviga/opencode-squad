@@ -210,4 +210,12 @@ UPDATE tasks SET report_captured_at = updated_at WHERE raw_report IS NOT NULL AN
 CREATE INDEX IF NOT EXISTS idx_tasks_merged ON tasks(mission_id, merged_at);
 `,
   },
+  {
+    version: 8,
+    name: "task_capabilities",
+    sql: `
+ALTER TABLE tasks ADD COLUMN capabilities_json TEXT;
+UPDATE tasks SET capabilities_json = '[]' WHERE capabilities_json IS NULL;
+`,
+  },
 ];

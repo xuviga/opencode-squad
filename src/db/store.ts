@@ -59,6 +59,7 @@ export type Task = {
   status: string;
   acceptance: string[];
   dependsOn: string[];
+  capabilities: string[];
   staffID: string | null;
   sessionID: string | null;
   assignedAt: string | null;
@@ -177,6 +178,7 @@ type TaskRow = {
   status: string;
   acceptance_json: string;
   depends_on_json: string;
+  capabilities_json: string | null;
   staff_id: string | null;
   session_id: string | null;
   assigned_at: string | null;
@@ -303,6 +305,7 @@ function mapTask(row: TaskRow): Task {
     status: row.status,
     acceptance: parseJSON<string[]>(row.acceptance_json) ?? [],
     dependsOn: parseJSON<string[]>(row.depends_on_json) ?? [],
+    capabilities: parseJSON<string[]>(row.capabilities_json) ?? [],
     staffID: row.staff_id,
     sessionID: row.session_id,
     assignedAt: row.assigned_at,
@@ -450,8 +453,8 @@ export class SquadStore {
 
       const insertTask = this.db.query(
         `INSERT INTO tasks
-         (mission_id, id, title, class, role, grade, status, acceptance_json, depends_on_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (mission_id, id, title, class, role, grade, status, acceptance_json, depends_on_json, capabilities_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const task of plan.tasks) {
         insertTask.run(
@@ -464,6 +467,7 @@ export class SquadStore {
           task.dependsOn && task.dependsOn.length > 0 ? "pending" : "ready",
           JSON.stringify(task.acceptance),
           JSON.stringify(task.dependsOn ?? []),
+          JSON.stringify(task.capabilities ?? []),
           timestamp,
           timestamp,
         );

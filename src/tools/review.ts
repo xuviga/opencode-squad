@@ -3,6 +3,7 @@ import type { SquadStore } from "../db/store";
 import { nextGrade } from "../personas";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
+import { requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
 type ReviewInput = {
@@ -99,9 +100,11 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             "You see only the Task Brief, the Worker Report, and the diff. You do not see the worker's reasoning.",
             "You have no tools: do not read files, search, or run commands. Judge only the provided material.",
             "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+            `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
+            "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
             "Return ONLY one JSON object, without markdown fences, matching this schema:",
             JSON.stringify(VERDICT_SCHEMA, null, 2),
-            "Rules: a pass must have checked containing diff and tests; a fail must have at least one finding with concrete evidence.",
+            `Rules: a pass must have checked containing ${requiredChecks(task.class).join(", ")}; a fail must have at least one finding with concrete evidence.`,
             "Task Brief:",
             JSON.stringify(task.brief ?? {}, null, 2),
             "Worker Report:",

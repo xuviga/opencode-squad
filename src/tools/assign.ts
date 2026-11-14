@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode/plugin";
+import { resolveCapabilities } from "../capabilities";
 import type { SquadStore } from "../db/store";
 import { fail, ok } from "./result";
 
@@ -69,6 +70,11 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             | undefined;
           const isRework = task.status === "returned";
 
+          const capabilities = Array.from(
+            new Set([...(task.capabilities ?? []), ...(args.capabilities ?? [])]),
+          );
+          const capabilityResolution = await resolveCapabilities(ctx, capabilities);
+
           const brief = {
             task_id: task.id,
             mission_id: task.missionID,
@@ -79,7 +85,8 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             context: args.context ?? [],
             acceptance: task.acceptance,
             constraints: args.constraints ?? {},
-            capabilities: args.capabilities ?? [],
+            capabilities,
+            capability_resolution: capabilityResolution.resolved,
             output_schema: "report_v1",
             ...(isRework && previousVerdict
               ? {
@@ -90,16 +97,21 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
               : {}),
           };
 
-          const prompt = [
+          const promptLines = [
             `You are SQUAD ${staff.persona} at grade ${staff.grade}.`,
             isRework
               ? "This is a rework. Address every finding from the previous verdict and provide the actual deliverable, not a description of it."
               : "Complete the task described in the Task Brief below.",
             "Return ONLY one JSON object, without markdown fences, matching this schema:",
             JSON.stringify(REPORT_SCHEMA, null, 2),
-            "Task Brief:",
-            JSON.stringify(brief, null, 2),
-          ].join("\n\n");
+          ];
+          if (capabilityResolution.guidance.length > 0) {
+            promptLines.push(
+              ["Capabilities for this task:", ...capabilityResolution.guidance].join("\n"),
+            );
+          }
+          promptLines.push("Task Brief:", JSON.stringify(brief, null, 2));
+          const prompt = promptLines.join("\n\n");
 
           const assigned = store.assignTask(args.mission_id, args.task_id, args.staff_id, brief);
 
@@ -121,6 +133,8 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             session_id: sessionID,
             brief,
             assigned_status: assigned.status,
+            capabilities: capabilityResolution.resolved,
+            capability_warnings: capabilityResolution.warnings,
           });
         } catch (error) {
           return fail(error);

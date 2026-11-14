@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · integration gate ✅**; TUI live check, M6 universal впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ · integration gate ✅**; TUI live check и M7 впереди
 
 ## Как ведётся журнал
 
@@ -23,7 +23,7 @@
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
 | M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge работают |
 | M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
-| M6 Универсальные классы | ⚪ не начат | — |
+| M6 Универсальные классы | ✅ | 10 шаблонов планов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research mission `m_e6049e51` |
 | M7 Закалка | ⚪ не начат | — |
 
 ## Журнал
@@ -203,10 +203,12 @@
 
 ```text
 src/
-  index.ts              Plugin.define + 22 tools + RPC
-  version.ts            0.3.0
+  index.ts              Plugin.define + 25 tools + RPC
+  version.ts            0.4.0
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
+  classes.ts            шаблоны классов + buildPlanTemplate
+  capabilities.ts       резолв skill/mcp/tool + guidance
   report.ts             TaskReport + парсер
   verdict.ts            Verdict + pass/fail правила
   ruling.ts             Ruling арбитра + parser
@@ -220,13 +222,16 @@ src/
   runtime/messages.ts   assistant text + last assistant
   runtime/diff.ts       per-task diff: git-worktree / vcs
   runtime/integrate.ts  cherry-pick worktree → main
-  db/schema.ts          migrations 001–007
+  db/schema.ts          migrations 001–008
   db/index.ts           openSquadDb + WAL + миграции
   db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist/disputes/audits/lessons
   tools/status.ts       squad_status
   tools/probe.ts        squad_probe
   tools/mission.ts      squad_mission
   tools/plan.ts         squad_plan
+  tools/template.ts     squad_template
+  tools/capabilities.ts squad_capabilities
+  tools/image.ts        squad_image
   tools/budget.ts       squad_budget
   tools/hire.ts         squad_hire
   tools/staff.ts        squad_staff
@@ -262,6 +267,13 @@ dev/
   M5_PROMPT.md          M5 audit smoke
   M5_PROCESS.md         M5 process audit smoke
   M6_PROMPT.md          M6 integration smoke
+  m6-caps-prompt.md     M6 capabilities smoke
+  m6-live-prompt.md     M6 research mission smoke
+  m6-synth-prompt.md    M6 synthesize step
+  m6-review-prompt.md   M6 collect review
+  m6-review-synth-prompt.md M6 synth review
+  m6-finalize-prompt.md M6 audit + finalize
+  m6-image-prompt.md    M6 image smoke
   one-line-proof.txt    artifact M2
   m6-proof.txt          artifact M6 (merged to main)
 scripts/
@@ -275,6 +287,7 @@ scripts/
   rpc-state.ts
 tests/
   plan.test.ts
+  classes.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -316,22 +329,62 @@ tests/
 10. Dispute round limit 2 enforced; arbiter получает только claim/messages/brief/report/verdict/diff.
 11. Process auditor без инструментов нашёл реальные дефекты: audit после `done`, отсутствие merge-события, повторный review одного capture.
 
+### 2026-11-14 · Сессия 9 — M6 universal classes, capabilities, image
+
+**Сделано**
+
+- [x] `src/classes.ts`: 10 шаблонов — `code`, `research`, `writing`, `design`, `data`, `ops`, `review`, `planning`, `creative`, `mixed`; шаги, роли, грейды, acceptance, DAG и capabilities.
+- [x] `squad_template`: `list` и `build`; строит валидированный план по классу и цели, поддерживает prefix/role/extra capabilities.
+- [x] `PlanTask.capabilities`; миграция 008 `tasks.capabilities_json`; capabilities сохраняются при submit и видны в task/report.
+- [x] `src/capabilities.ts`: резолв `skill:`, `mcp:`, `tool:` и bare-имён; статус available, предупреждения, guidance-строки.
+- [x] `squad_capabilities`: проверка доступности скиллов, MCP-серверов и инструментов до планирования.
+- [x] `squad_assign` объединяет capabilities задачи и аргумента, добавляет guidance в brief и prompt, возвращает resolution и warnings.
+- [x] Class-aware verdict: `code/data/ops` требуют `checked: diff+tests`; research/writing/design/review/planning/creative/mixed — `acceptance+evidence`; review и audit промпты обновлены.
+- [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
+- [x] Версия `0.4.0`, 25 инструментов, 47 тестов.
+
+**Проверки**
+
+| Сценарий | Результат |
+|---|---|
+| `bun run typecheck` | ✅ без ошибок |
+| `bun test` | ✅ 47 pass, 0 fail, 203 expect |
+| `squad_template list/build` live | ✅ 10 шаблонов; research-план `research_collect` → `research_synthesize` |
+| `squad_capabilities` live | ✅ `skill:coreldraw`, `mcp:poster-compiler`, `tool:squad.image` available; `skill:nope`/`mcp:nope` warned |
+| Research mission `m_e6049e51` | ✅ template → plan → approve → hire G1 → assign; capabilities `tool:websearch`,`mcp:poster-compiler` persisted; resolution 2/2, warnings 0; report submitted |
+| Blind review collect | ✅ reviewer G2, pass/low |
+| Synthesize step | ✅ writer G2, report submitted, artifact path записан |
+| Blind review synthesize | ✅ reviewer G3, pass/low |
+| Second-review audit | ✅ pass/low (1 non-blocking finding: claim без цитаты в evidence tail) |
+| Finalize | ⛔ `worktree of research_synthesize is not merged; run squad_integrate` |
+| `squad_image` без модели | ✅ понятная ошибка: no image model configured |
+| `squad_image` с `opencode/gpt-image-2.5-sunburst` | ⛔ `Generate.ProviderRequestError: This API key has expired` — вызов дошёл до провайдера, ключ окружения просрочен |
+
+**Найдено**
+
+1. `ctx.model.list()` в plugin context не показывает image-модель, хотя `opencode.models(type=image)` её видит; нужен явный `model` или отдельный конфиг.
+2. Verdict до M6 требовал `diff+tests` для любого pass — research/writing/design не могли пройти честно; исправлено class-aware проверкой.
+3. `websearch` в standalone `--auto` вернул `Web search cancelled`; worker использовал `webfetch` и всё равно собрал evidence.
+4. Worker записал артефакт в `%TEMP%/opencode/m_e6049e51/`, а не в worktree; worktree остался без коммита, поэтому finalize требует integrate.
+5. `research_synthesize` worktree создан для writer (access=write), хотя файл вне worktree; интеграция зафиксирует пустой cherry-pick как alreadyMerged.
+
 **Открытые вопросы**
 
 - TUI panel code готов, но живой визуальный прогон `/squad` → approve/reject ещё не выполнен.
 - RPC `state` в shared service был недоступен, пока plugin location не прогрет; TUI использует тот же сервер, где plugin загружен.
+- `squad_image` заблокирован просроченным OpenCode API key; нужен валидный ключ для реальной генерации.
+- `m_e6049e51` в `integrating`: осталось `squad_integrate` для `research_synthesize`, затем `squad_finalize`.
 - Dispute `rule` live-тест не проведён (unit-тест покрывает).
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
 - Параллельный найм технически возможен, но stress-тест 3+ задач не проводился.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.
 - `.squad/squad.db` project-local.
-- Git: `a077ca5` (docs P1–P3); TUI — следующий коммит.
 
 **Дальше**
 
-1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-2. **M6 universal classes** — research/writing/design/data/ops/creative + скиллы/MCP.
-3. Live dispute rule + stress-тест 3 параллельных задач.
-4. Live-тест timeout + замена зависшего сотрудника.
-5. Budget/TUI-интеграция и аудит процесса по расписанию.
+1. `squad_integrate` + `squad_finalize` для `m_e6049e51`, зафиксировать mission `done`.
+2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
+3. **Design class live** — после замены API key: `squad_image` + design template + review.
+4. Stress-тест 3 параллельных задач и live dispute `rule`.
+5. M7: chaos-тесты, docs, release.

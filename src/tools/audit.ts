@@ -5,7 +5,7 @@ import { parseProcessAuditText } from "../process-audit";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { extractLastAssistantText } from "../runtime/messages";
-import { parseVerdictText } from "../verdict";
+import { parseVerdictText, requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
 type AuditInput = {
@@ -64,9 +64,11 @@ async function runTaskAudit(
     "The first reviewer passed this task. Verify it independently and adversarially.",
     "You see only the Task Brief, Worker Report, and diff. You do not see the first reviewer's reasoning.",
     "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+    `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
+    "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
     "Return ONLY one JSON object, without markdown fences, matching this schema:",
     JSON.stringify(VERDICT_SCHEMA, null, 2),
-    "Rules: a pass must include diff and tests in checked; a fail needs at least one finding with concrete evidence.",
+    `Rules: a pass must have checked containing ${requiredChecks(task.class).join(", ")}; a fail needs at least one finding with concrete evidence.`,
     "Task Brief:",
     JSON.stringify(task.brief ?? {}, null, 2),
     "Worker Report:",
@@ -103,7 +105,7 @@ async function runTaskAudit(
 
   const messages = await ctx.session.context({ sessionID: reviewer.sessionID });
   const rawVerdict = extractLastAssistantText(messages);
-  const verdict = parseVerdictText(rawVerdict);
+  const verdict = parseVerdictText(rawVerdict, task.class);
   const audit = store.recordAudit({
     missionID,
     taskID,

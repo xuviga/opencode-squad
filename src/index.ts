@@ -7,11 +7,13 @@ import { registerAssignTool } from "./tools/assign";
 import { registerAuditTool } from "./tools/audit";
 import { registerBudgetTool } from "./tools/budget";
 import { registerCareerTool } from "./tools/career";
+import { registerCapabilitiesTool } from "./tools/capabilities";
 import { registerCheckTool } from "./tools/check";
 import { registerDisputeTool } from "./tools/dispute";
 import { registerFireTool } from "./tools/fire";
 import { registerFinalizeTool } from "./tools/finalize";
 import { registerHireTool } from "./tools/hire";
+import { registerImageTool } from "./tools/image";
 import { registerIntegrateTool } from "./tools/integrate";
 import { registerMissionTool } from "./tools/mission";
 import { registerPlanTool } from "./tools/plan";
@@ -23,6 +25,7 @@ import { registerStaffTool } from "./tools/staff";
 import { registerStatusTool } from "./tools/status";
 import type { RpcRuntimeState } from "./tools/status";
 import { registerTasksTool } from "./tools/tasks";
+import { registerTemplateTool } from "./tools/template";
 import { registerVerdictTool } from "./tools/verdict";
 import { registerWaitTool } from "./tools/wait";
 import { VERSION } from "./version";
@@ -57,6 +60,9 @@ export default Plugin.define({
       registerDisputeTool(ctx, store),
       registerAuditTool(ctx, store),
       registerIntegrateTool(ctx, store),
+      registerTemplateTool(ctx),
+      registerImageTool(ctx, store),
+      registerCapabilitiesTool(ctx),
     ]);
 
     let rpcRegistration:

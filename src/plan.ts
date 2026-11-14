@@ -24,6 +24,7 @@ export type PlanTask = {
   grade: PlanGrade;
   acceptance: string[];
   dependsOn?: string[];
+  capabilities?: string[];
 };
 
 export type MissionPlan = {
@@ -86,6 +87,12 @@ export function validatePlan(value: unknown): MissionPlan {
         )
       : undefined;
 
+    const capabilities = Array.isArray(task.capabilities)
+      ? task.capabilities.map((item, capabilityIndex) =>
+          asString(item, `plan.tasks[${index}].capabilities[${capabilityIndex}]`),
+        )
+      : undefined;
+
     return {
       id,
       title: asString(task.title, `plan.tasks[${index}].title`),
@@ -94,6 +101,7 @@ export function validatePlan(value: unknown): MissionPlan {
       grade: grade as PlanGrade,
       acceptance,
       dependsOn,
+      capabilities,
     };
   });
 

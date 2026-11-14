@@ -20,6 +20,19 @@ export type Verdict = {
   checked: string[];
 };
 
+/** Classes whose deliverable is a diff plus executable checks. */
+const DIFF_CLASSES = new Set(["code", "data", "ops"]);
+
+/**
+ * A pass verdict must prove the acceptance criteria by class. Code-like work
+ * needs a diff and test evidence; research, writing, design and similar work
+ * has no diff, so the report evidence and acceptance checks carry the proof.
+ */
+export function requiredChecks(taskClass?: string): string[] {
+  if (taskClass === undefined) return ["diff", "tests"];
+  return DIFF_CLASSES.has(taskClass) ? ["diff", "tests"] : ["acceptance", "evidence"];
+}
+
 function asRecord(value: unknown, path: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${path} must be an object`);
@@ -34,7 +47,7 @@ function asString(value: unknown, path: string): string {
   return value.trim();
 }
 
-export function validateVerdict(value: unknown): Verdict {
+export function validateVerdict(value: unknown, taskClass?: string): Verdict {
   const verdict = asRecord(value, "verdict");
   const outcome = verdict.verdict;
   if (typeof outcome !== "string" || !(VERDICT_OUTCOMES as readonly string[]).includes(outcome)) {
@@ -68,7 +81,7 @@ export function validateVerdict(value: unknown): Verdict {
     throw new Error("fail verdict requires at least one finding with evidence");
   }
   if (outcome === "pass") {
-    for (const required of ["diff", "tests"]) {
+    for (const required of requiredChecks(taskClass)) {
       if (!checked.includes(required)) {
         throw new Error(`pass verdict requires checked: ${required}`);
       }
@@ -83,7 +96,7 @@ export function validateVerdict(value: unknown): Verdict {
   };
 }
 
-export function parseVerdictText(text: string): Verdict {
+export function parseVerdictText(text: string, taskClass?: string): Verdict {
   const parsed = parseLastJsonObject(text, "reviewer verdict");
-  return validateVerdict(parsed);
+  return validateVerdict(parsed, taskClass);
 }

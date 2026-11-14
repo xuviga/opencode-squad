@@ -40,6 +40,7 @@ export async function registerPlanTool(ctx: Plugin.Context, store: SquadStore) {
                     grade: { type: "string" },
                     acceptance: { type: "array", items: { type: "string" } },
                     dependsOn: { type: "array", items: { type: "string" } },
+                    capabilities: { type: "array", items: { type: "string" } },
                   },
                   required: ["id", "title", "class", "role", "grade", "acceptance"],
                   additionalProperties: false,

@@ -43,4 +43,19 @@ describe("validateVerdict", () => {
     const text = JSON.stringify(fail) + "\n" + JSON.stringify(pass);
     expect(parseVerdictText(text).verdict).toBe("pass");
   });
+
+  test("code class requires diff and tests", () => {
+    expect(validateVerdict(pass, "code").verdict).toBe("pass");
+    expect(() => validateVerdict({ ...pass, checked: ["diff"] }, "code")).toThrow(
+      "requires checked: tests",
+    );
+  });
+
+  test("research class passes on acceptance and evidence without a diff", () => {
+    const research = { ...pass, checked: ["acceptance", "evidence"] };
+    expect(validateVerdict(research, "research").verdict).toBe("pass");
+    expect(() => validateVerdict({ ...pass, checked: ["acceptance"] }, "writing")).toThrow(
+      "requires checked: evidence",
+    );
+  });
 });
