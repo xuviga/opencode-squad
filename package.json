@@ -1,6 +1,6 @@
 {
   "name": "opencode-squad",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "SQUAD — multi-agent orchestrator plugin for OpenCode 2.3.0",
@@ -16,6 +16,9 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "lint": "biome check src tests",
+    "lint:fix": "biome check --write src tests",
+    "verify": "bun run typecheck && bun run lint && bun test",
     "test": "bun test",
     "probe": "bun run scripts/probe-client.ts",
     "probe:keep": "bun run scripts/probe-client.ts --keep",
@@ -36,6 +39,7 @@
     "solid-js": "^1.9.19"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.7",
     "@opencode/client": "2.3.0",
     "@opencode/schema": "2.3.0",
     "@opencode/theme": "2.3.0",

@@ -2,7 +2,7 @@
 
 Мульти-агентный оркестратор для **OpenCode 2.3.0**: босс планирует миссию, нанимает сотрудников, проводит слепую ревизию, разрешает споры и сливает работу в main через изолированные worktree.
 
-Текущая версия: **0.7.0** · 28 инструментов · 62 теста.
+Текущая версия: **0.8.0** · 29 инструментов · 77 тестов.
 
 ## Что внутри
 
@@ -10,7 +10,8 @@
 - **Найм и работа**: `squad_hire`, `squad_staff`, `squad_assign`, `squad_wait`, `squad_check`.
 - **Слепая ревизия**: `squad_review` нанимает ревизора на грейд выше, `squad_verdict` применяет pass/fail; rework ≤ 2.
 - **HR**: `squad_appraise`, `squad_fire` (только с evidence + 30-дневный blacklist), `squad_scorecard`, `squad_career`.
-- **Параллель и изоляция**: worktree на писателя, DAG задач, `squad_integrate` (cherry-pick, `strategy: abort|theirs`), `squad_finalize`.
+- **Параллель и изоляция**: worktree на писателя, DAG задач, `squad_integrate` (cherry-pick, `strategy: abort|theirs`, удаляет worktree после слияния), `squad_finalize`.
+- **Гигиена состояния**: `squad_gc` (scan/apply) находит и закрывает залипшие миссии и осиротевшие worktree; `squad_status` показывает `staleMissions`; `squad_cancel` и `squad_finalize` убирают worktree за собой.
 - **Споры и аудит**: `squad_dispute` (open/reply/rule, арбитр pro·max), `squad_audit` (вторая ревизия + process auditor), `squad_cancel`.
 - **TUI**: команда `/squad` и панель `session.panel` с approve/reject, статусом миссии, штатом и расходом.
 - **Универсальные классы**: `code`, `research`, `writing`, `design`, `data`, `ops`, `review`, `planning`, `creative`, `mixed` через `squad_template`.
@@ -62,6 +63,8 @@ squad_verdict { mission_id, task_id }
 squad_integrate { mission_id }
 squad_audit { action: "sample", mission_id }
 squad_finalize { mission_id }
+squad_gc { action: "scan" }        // залипшие миссии и осиротевшие worktree
+squad_gc { action: "apply", force: false }
 ```
 
 Для TUI: откройте сессию и введите `/squad`. Панель: `a` — approve, `r` — reject, `escape` — close.
@@ -73,7 +76,10 @@ squad_finalize { mission_id }
 - `squad_finalize` требует: все задачи `integrated`, ≥ `max(1, ceil(10% задач))` вторых ревизий, все worktree-задачи слиты.
 - `squad_wait` автоматически коммитит грязный worktree после отчёта воркера, поэтому writer/designer без shell всё равно интегрируются; при ошибке коммита задача падает fail-closed.
 - DeepSeek Flash принимает image attachments: `squad_look` и ревизоры видят PNG, а `squad_preview` даёт raster preview из SVG без image-модели.
-- `squad_integrate` отказывается работать на грязном main; при конфликте `abort` оставляет main чистым, `theirs` разрешает конфликт в пользу воркера и фиксирует strategy.
+- `squad_integrate` отказывается работать на грязном main; при конфликте `abort` оставляет main чистым, `theirs` разрешает конфликт в пользу воркера и фиксирует strategy. После успешного cherry-pick worktree удаляется, а diff для ревизии читается из integration-коммита.
+- `squad_finalize` проверяет, что каждый `integration_commit` — предок `HEAD` main (git, не модель), и только потом ставит `done`; после финализации worktree миссии удаляются.
+- `squad_audit` делает ту же проверку детерминированно до вызова ревизора: задача «integrated» без коммита в main падает без трат на модель. Процессный аудит получает `process_checks` (git-факты) и обязан валить миссию при `ok:false`.
+- `squad_gc` — janitor: `scan` показывает миссии без активности дольше `staleAfterMinutes` (120) и worktree терминальных/залипших миссий; `apply` отменяет их и удаляет worktree (`force:false` не трогает грязные).
 - Ревизор для code-like классов обязан проверить `diff+tests`; для research/writing/design — `acceptance+evidence`.
 - Увольнение и понижение требуют записанного основания.
 
@@ -81,17 +87,19 @@ squad_finalize { mission_id }
 
 ```text
 src/
-  index.ts          Plugin.define + 28 tools + RPC
+  index.ts          Plugin.define + 29 tools + RPC
   plan.ts           MissionPlan + валидация
   classes.ts        шаблоны классов
   capabilities.ts   резолв skill/mcp/tool
   rpc.ts            SquadRpc state/plan
   tui.tsx           TUI plugin /squad
-  db/               SQLite, migrations 001–008, store
-  runtime/          hire, diff, integrate, probe, messages
-  tools/            28 инструментов
+  db/               SQLite, migrations 001–008, store-facade
+  db/repositories/  missions, tasks, staff, ledger, disputes, audits, events
+  runtime/          hire, diff, integrate, evidence, gc, worktree, probe, messages
+  tools/            29 инструментов
 .opencode/agents/   squad-reviewer, squad-arbiter, squad-auditor (no tools)
 tests/              unit/integration/contract
+.github/workflows/  CI: typecheck + biome + tests
 docs/PLAN.md        архитектура и этапы
 docs/DEVLOG.md      журнал разработки и живые прогоны
 CHANGELOG.md        история версий
@@ -101,10 +109,13 @@ CHANGELOG.md        история версий
 
 ```bash
 bun run typecheck
+bun run lint
 bun test
 bun run tui:live
 bun run vision:probe
 ```
+
+`bun run verify` выполняет typecheck + lint + tests одной командой. То же самое гоняет CI на каждый push/PR.
 
 Живые прогоны и известные ограничения — в `docs/DEVLOG.md`.
 
@@ -114,3 +125,5 @@ bun run vision:probe
 - TUI live автоматизирован: `bun run tui:live` поднимает реальный PTY, открывает `/squad`, проверяет reject → resubmit → approve и статусы в SQLite.
 - `session.wait` ждёт model work, но не `session.shell`; timeout-ветка покрыта unit-тестом с fake session.
 - `.squad/squad.db` хранится в проекте; для нескольких проектов — своя БД на проект.
+- `squad_gc` не запускается сам: janitor вызывается явно (`scan`/`apply`), чтобы не закрыть живую миссию. Порог задаётся `stale_minutes` (по умолчанию 120).
+- После `squad_integrate` worktree удаляется, поэтому поздняя ревизия читает diff из integration-коммита (`source: "integration-commit"`), а не из рабочего каталога.

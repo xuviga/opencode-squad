@@ -21,8 +21,7 @@ describe("validateRuling", () => {
   });
 
   test("parses concatenated JSON and takes the last ruling", () => {
-    const text =
-      JSON.stringify({ ...valid, winner: "reviewer" }) + "\n" + JSON.stringify(valid);
+    const text = `${JSON.stringify({ ...valid, winner: "reviewer" })}\n${JSON.stringify(valid)}`;
     expect(parseRulingText(text).winner).toBe("worker");
   });
 });

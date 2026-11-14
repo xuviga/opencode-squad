@@ -71,7 +71,7 @@ describe("preview", () => {
       worktreeDirectory: directory,
     });
     store.assignTask(mission.id, "d1", staff.id, { goal: "poster" });
-    const task = store.markTaskRunning(mission.id, "d1");
+    store.markTaskRunning(mission.id, "d1");
     store.saveRawReport(mission.id, "d1", "{}");
     const submitted = store.requireTask(mission.id, "d1");
 

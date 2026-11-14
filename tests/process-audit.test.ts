@@ -36,7 +36,7 @@ describe("validateProcessAudit", () => {
   });
 
   test("parses concatenated JSON and takes the last audit", () => {
-    const text = JSON.stringify(fail) + "\n" + JSON.stringify(pass);
+    const text = `${JSON.stringify(fail)}\n${JSON.stringify(pass)}`;
     expect(parseProcessAuditText(text).status).toBe("pass");
   });
 });

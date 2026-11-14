@@ -3,6 +3,7 @@ import type { SquadStore } from "../db/store";
 import { nextGrade } from "../personas";
 import { parseProcessAuditText } from "../process-audit";
 import { taskDiff } from "../runtime/diff";
+import { missionEvidence, taskEvidence } from "../runtime/evidence";
 import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
 import { extractLastAssistantText } from "../runtime/messages";
@@ -44,6 +45,44 @@ async function runTaskAudit(
     throw new Error(`task has no first reviewer: ${taskID}`);
   }
 
+  // Deterministic gate: an "integrated" task whose commit never reached main is
+  // a false pass, regardless of what any model says.
+  const evidence = taskEvidence(ctx.location.directory, task);
+  if (evidence.problems.length > 0) {
+    const findings = evidence.problems.map((claim, index) => ({
+      id: `E${index + 1}`,
+      claim,
+      evidence: `task ${taskID}: merged_at=${task.mergedAt ?? "null"}, integration_commit=${task.integrationCommit ?? "null"}`,
+      required_fix: "integrate the task commit into main and re-run the second review",
+    }));
+    const verdict = {
+      verdict: "fail" as const,
+      severity: "critical" as const,
+      findings,
+      checked: ["diff"],
+    };
+    const audit = store.recordAudit({
+      missionID,
+      taskID,
+      kind: "second_review",
+      status: "fail",
+      verdict,
+      notes: `deterministic integration evidence failed: ${evidence.problems.join("; ")}`,
+    });
+    return {
+      audit,
+      verdict,
+      task: store.requireTask(missionID, taskID),
+      reviewer: null,
+      reviewer_session_id: null,
+      deterministic: true,
+      evidence,
+      cost: 0,
+      tokens: { input: 0, output: 0 },
+      raw_verdict: "(deterministic check)",
+    };
+  }
+
   const reviewerGrade = nextGrade(task.grade);
   const reviewer = await hireEmployee(ctx, store, {
     missionID,
@@ -67,6 +106,12 @@ async function runTaskAudit(
     "The first reviewer passed this task. Verify it independently and adversarially.",
     "You see only the Task Brief, Worker Report, and diff. You do not see the first reviewer's reasoning.",
     "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+    `Integration evidence: ${JSON.stringify(evidence)}.`,
+    ...(evidence.reviewRoundsWithoutRework > 0
+      ? [
+          `This task went through ${evidence.reviewRound} review rounds with only ${evidence.attempts} rework attempts. Check that the reviewed report is current and not a stale capture.`,
+        ]
+      : []),
     `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
     "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
     "External assets means remote URLs, @font-face rules, <image>, data: URIs or embedded binaries; font-family names for locally installed fonts are allowed.",
@@ -159,16 +204,19 @@ async function runProcessAudit(
   timeoutMs: number,
 ) {
   const mission = store.requireMission(missionID);
+  const tasks = store.listTasks(missionID);
+  const processChecks = missionEvidence(ctx.location.directory, tasks);
   const payload = {
     mission,
     plan: store.getPlan(missionID),
-    tasks: store.listTasks(missionID).map(({ brief, rawReport, ...task }) => task),
+    tasks: tasks.map(({ brief, rawReport, ...task }) => task),
     staff: store.listStaff(100),
     budget: store.budgetSummary(missionID),
     events: store.listEvents(missionID, 100),
     disputes: store.listDisputes(missionID),
     audits: store.listAudits(missionID),
     lessons: store.listLessons(missionID),
+    process_checks: processChecks,
   };
 
   const auditor = await hireEmployee(ctx, store, {
@@ -184,6 +232,9 @@ async function runProcessAudit(
     "Return ONLY one JSON object, without markdown fences:",
     '{"status":"pass | fail","summary":"short verdict","findings":[{"id":"P1","claim":"...","evidence":"...","required_fix":"..."}]}',
     "A fail must contain at least one finding with evidence.",
+    "process_checks is computed by git, not by a model. If process_checks.ok is false, status MUST be fail and each entry of process_checks.problems MUST appear as a finding.",
+    "If a task appears in process_checks.suspiciousReviewRounds, verify from events/disputes whether a dispute or reviewer reset explains the extra rounds; if not, fail.",
+    "A second review that ran after the mission was marked done, or an integrated task whose commit is not in main, is a process failure.",
     "Mission report JSON:",
     JSON.stringify(payload, null, 2).slice(0, 32_000),
   ].join("\n\n");

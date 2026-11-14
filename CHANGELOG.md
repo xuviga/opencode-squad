@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — 2026-11-14
+
+- **P1 worktree lifecycle**: `squad_integrate` removes the worktree after a successful cherry-pick and clears `staff.worktree_directory`; `squad_cancel` force-removes aborted worktrees; `squad_finalize` sweeps the mission worktrees. Diffs for post-integration review are reconstructed from the integration commit.
+- **P2 janitor**: new `squad_gc` (`scan`/`apply`) reports and closes stale non-terminal missions and orphaned worktrees; `squad_status` exposes `staleMissions` + `staleAfterMinutes` (default 120).
+- **P3 store split**: `store.ts` is now a ~300-line facade; mission/task/staff/ledger/dispute/audit/event logic lives in `src/db/repositories/*`. Public API unchanged.
+- **P4 CI + lint**: Biome 2.6 (`bun run lint`) and GitHub Actions (`typecheck` → `lint` → `test`); `bun run verify`.
+- **P5 integration evidence**: `squad_audit` fails deterministically when an integrated task has no commit or its commit is not an ancestor of main; `squad_finalize` applies the same gate; process audit receives `process_checks` and flags review rounds without rework.
+- 29 tools, 77 tests. Cleanup executed on this repo: 17 stale worktrees removed (11 unmerged commits preserved as `refs/squad-archive/*`), 7 zombie missions aborted in `dev/.squad`.
+
 ## 0.7.0 — 2026-11-14
 
 - TUI live automation on real PTY: `/squad`, panel render, reject → resubmit → approve, SQLite status checks.

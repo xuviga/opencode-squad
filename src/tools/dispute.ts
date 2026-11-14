@@ -174,7 +174,7 @@ export async function registerDisputeTool(ctx: Plugin.Context, store: SquadStore
 
             const arbiterMessages = await ctx.session.context({ sessionID: arbiter.sessionID });
             const rawRuling = extractLastAssistantText(arbiterMessages);
-            let ruling;
+            let ruling: ReturnType<typeof parseRulingText>;
             try {
               ruling = parseRulingText(rawRuling);
             } catch (error) {

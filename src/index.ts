@@ -13,6 +13,7 @@ import { registerCheckTool } from "./tools/check";
 import { registerDisputeTool } from "./tools/dispute";
 import { registerFireTool } from "./tools/fire";
 import { registerFinalizeTool } from "./tools/finalize";
+import { registerGcTool } from "./tools/gc";
 import { registerHireTool } from "./tools/hire";
 import { registerImageTool } from "./tools/image";
 import { registerIntegrateTool } from "./tools/integrate";
@@ -60,6 +61,7 @@ export default Plugin.define({
       registerCareerTool(ctx, store),
       registerTasksTool(ctx, store),
       registerFinalizeTool(ctx, store),
+      registerGcTool(ctx, store),
       registerDisputeTool(ctx, store),
       registerAuditTool(ctx, store),
       registerIntegrateTool(ctx, store),

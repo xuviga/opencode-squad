@@ -30,7 +30,7 @@ describe("validateReport", () => {
   });
 
   test("parses JSON surrounded by markdown fences", () => {
-    const report = parseReportText("```json\n" + JSON.stringify(validReport) + "\n```");
+    const report = parseReportText(`\`\`\`json\n${JSON.stringify(validReport)}\n\`\`\``);
     expect(report.summary).toBe("Fixed pagination");
   });
 

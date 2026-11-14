@@ -75,10 +75,39 @@ function worktreeDiff(directory: string): DiffFile[] {
   return data;
 }
 
+/** Splits a `git show --patch` payload into per-file entries. */
+function splitPatch(patch: string): DiffFile[] {
+  return patch
+    .split(/^(?=diff --git )/m)
+    .filter((chunk) => chunk.trim().length > 0)
+    .map((chunk) => {
+      const match = /^diff --git a\/(.+?) b\/(.+)$/m.exec(chunk);
+      return {
+        file: match?.[2] ?? "unknown",
+        status: "changed",
+        patch: chunk,
+      };
+    });
+}
+
+/** Diff of the main-checkout integration commit when the worktree is gone. */
+function integrationDiff(directory: string, commit: string, asDirectory: string) {
+  const patch = git(["show", "--format=", "--patch", commit], directory);
+  return {
+    requested_directory: asDirectory,
+    location: { directory: asDirectory },
+    source: "integration-commit",
+    commit,
+    data: splitPatch(patch),
+  };
+}
+
 /**
  * Returns the working-tree diff for the task's worker.
  * Staff worktree directory is authoritative because session.location may
- * report the project root.
+ * report the project root. Once a task is integrated the worktree is removed,
+ * so the diff is reconstructed from the integration commit in the main
+ * checkout instead.
  */
 export async function taskDiff(
   ctx: Plugin.Context,
@@ -106,6 +135,12 @@ export async function taskDiff(
       },
       data,
     };
+  } else if (task.integrationCommit) {
+    return integrationDiff(
+      ctx.location.directory,
+      task.integrationCommit,
+      directory,
+    );
   } else if (task.sessionID) {
     try {
       const info = await ctx.session.get({ sessionID: task.sessionID });

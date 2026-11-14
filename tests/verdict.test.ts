@@ -40,7 +40,7 @@ describe("validateVerdict", () => {
   });
 
   test("parses concatenated JSON and takes the last verdict", () => {
-    const text = JSON.stringify(fail) + "\n" + JSON.stringify(pass);
+    const text = `${JSON.stringify(fail)}\n${JSON.stringify(pass)}`;
     expect(parseVerdictText(text).verdict).toBe("pass");
   });
 

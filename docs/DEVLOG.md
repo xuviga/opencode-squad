@@ -512,3 +512,30 @@ tests/
 
 1. Пользоваться SQUAD из любого проекта через глобальный плагин.
 2. При обновлении плагина проверять `opencode plugin list` и `squad_status`.
+
+### 2026-11-14 — Сессия 13 — P1–P5 закрытие техдолга
+
+**Сделано**
+
+- [x] P1: worktree GC — `integrate` удаляет worktree после cherry-pick и чистит `staff.worktree_directory`; `cancel` удаляет force; `finalize` делает sweep. Поздняя ревизия читает diff из integration-коммита.
+- [x] P2: `squad_gc` (scan/apply) + `staleMissions` в `squad_status`; порог `staleAfterMinutes = 120`.
+- [x] P3: `store.ts` разрезан на фасад + `src/db/repositories/{missions,tasks,staff,ledger,disputes,audits,events}`; публичный API без изменений.
+- [x] P4: Biome 2.6 + `bun run lint` + GitHub Actions (typecheck → lint → test) + `bun run verify`.
+- [x] P5: `squad_audit` детерминированно валит integrated-задачу без коммита в main; `squad_finalize` — тот же гейт; process audit получает `process_checks`.
+- [x] Разовая зачистка: 17 stale worktree удалено, 11 неслитых коммитов сохранены в `refs/squad-archive/*`; 7 зомби-миссий в `dev/.squad` переведены в `aborted` (бэкап БД `.bak-2026-11-14T13-13-06-658Z`).
+
+**Проверки**
+
+| Сценарий | Результат |
+|---|---|
+| `bun run typecheck` | ✅ exit 0 |
+| `bun run lint` | ✅ 83 files, 0 errors |
+| `bun test` | ✅ 77 pass / 0 fail, 19 files |
+| `git worktree list` | ✅ только main checkout |
+| `listStaleMissions(120)` в dev | ✅ 0 |
+| Live plugin | ✅ 0.8.0, 29 tools, `squad_gc` доступен |
+
+**Дальше**
+
+1. Реальный прогон миссии с `squad_gc` в конце.
+2. Подумать об автоматическом janitor на старте миссии (сейчас только явный вызов).

@@ -115,7 +115,7 @@ export async function registerVerdictTool(ctx: Plugin.Context, store: SquadStore
             });
           }
 
-          let verdict;
+          let verdict: ReturnType<typeof parseVerdictText>;
           try {
             verdict = parseVerdictText(rawVerdict, task.class);
           } catch (error) {

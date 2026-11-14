@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { integrateWorktree } from "../runtime/integrate";
+import { removeWorktree } from "../runtime/worktree";
 import { fail, ok } from "./result";
 
 type IntegrateInput = {
@@ -70,12 +71,36 @@ export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadSto
               integration.commit,
               integration.sourceCommit,
             );
+
+            // The worktree is no longer needed: the commit is in main and the
+            // audit reads the diff from the integration commit. A dirty
+            // worktree is left in place and reported instead of force-deleted.
+            let worktreeRemoval:
+              | { directory: string; removed: boolean; error?: string }
+              | undefined;
+            if (staff.worktreeDirectory) {
+              worktreeRemoval = await removeWorktree(ctx, staff.worktreeDirectory);
+              if (worktreeRemoval.removed) {
+                store.clearWorktree(staff.id);
+                store.addEvent(args.mission_id, task.id, "worktree.removed", {
+                  directory: staff.worktreeDirectory,
+                });
+              } else {
+                store.addEvent(args.mission_id, task.id, "worktree.remove_failed", {
+                  directory: staff.worktreeDirectory,
+                  error: worktreeRemoval.error ?? "unknown",
+                });
+              }
+            }
+
             results.push({
               taskID: task.id,
               commit: integration.commit,
               sourceCommit: integration.sourceCommit,
               alreadyMerged: integration.alreadyMerged,
               strategy: integration.strategy,
+              worktreeRemoved: worktreeRemoval?.removed ?? false,
+              worktreeError: worktreeRemoval?.error,
               task: merged,
             });
           }

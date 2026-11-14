@@ -29,6 +29,7 @@ const EXPECTED_TOOLS = [
   "squad.career",
   "squad.tasks",
   "squad.finalize",
+  "squad.gc",
   "squad.dispute",
   "squad.audit",
   "squad.integrate",
@@ -79,7 +80,10 @@ describe("API drift", () => {
 
     const plugin = (await import("../src/index")).default;
     const cleanup = await plugin.setup(fakeCtx as never);
-    expect(new Set(registered)).toEqual(new Set(EXPECTED_TOOLS));
-    await cleanup?.();
+    try {
+      expect(new Set(registered)).toEqual(new Set(EXPECTED_TOOLS));
+    } finally {
+      await cleanup?.();
+    }
   });
 });

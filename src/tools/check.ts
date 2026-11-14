@@ -57,7 +57,7 @@ export async function registerCheckTool(ctx: Plugin.Context, store: SquadStore) 
             throw new Error(`report is stale for ${task.id}; run squad_wait after rework`);
           }
 
-          let report;
+          let report: ReturnType<typeof parseReportText>;
           try {
             report = parseReportText(task.rawReport);
           } catch (error) {

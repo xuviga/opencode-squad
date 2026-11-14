@@ -85,6 +85,7 @@ export async function registerStatusTool(
             externalPlugins: plugins.filter((plugin) => plugin.source.type !== "builtin").length,
             sessions: sessions.data.length,
             missions: store.countMissions(),
+            staleMissions: store.countStaleMissions(DEFAULT_CONFIG.staleAfterMinutes),
             staff: store.countStaff(),
             tasks: store.countTasks(),
             blacklist: store.countBlacklist(),
@@ -92,6 +93,7 @@ export async function registerStatusTool(
             audits: store.countAudits(),
             lessons: store.countLessons(),
           },
+          staleAfterMinutes: DEFAULT_CONFIG.staleAfterMinutes,
           deepseek,
           grades: gradeSnapshot(),
           agents: agents.map((agent) => ({

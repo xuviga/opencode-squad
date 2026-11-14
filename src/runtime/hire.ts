@@ -56,7 +56,7 @@ export async function hireEmployee(
     }
   }
 
-  let session;
+  let session: Awaited<ReturnType<typeof ctx.session.create>> | undefined;
   try {
     session = await ctx.session.create({
       parentID: request.parentSessionID,
