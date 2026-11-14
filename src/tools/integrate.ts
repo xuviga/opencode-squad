@@ -6,6 +6,7 @@ import { fail, ok } from "./result";
 type IntegrateInput = {
   mission_id?: string;
   task_id?: string;
+  strategy?: "abort" | "theirs";
 };
 
 export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadStore) {
@@ -13,12 +14,13 @@ export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadSto
     editor.add({
       name: "integrate",
       description:
-        "Merge integrated worktree commits into the main checkout via cherry-pick. Refuses dirty main; records integration.merged per task.",
+        "Merge integrated worktree commits into the main checkout via cherry-pick. Refuses dirty main; records integration.merged per task. strategy=abort stops on conflict, strategy=theirs auto-resolves content conflicts for the worker side.",
       input: {
         type: "object",
         properties: {
           mission_id: { type: "string" },
           task_id: { type: "string" },
+          strategy: { type: "string", enum: ["abort", "theirs"] },
         },
         required: ["mission_id"],
         additionalProperties: false,
@@ -60,6 +62,7 @@ export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadSto
             const integration = integrateWorktree(
               ctx.location.directory,
               staff.worktreeDirectory,
+              { strategy: args.strategy ?? "abort" },
             );
             const merged = store.markMerged(
               args.mission_id,
@@ -72,6 +75,7 @@ export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadSto
               commit: integration.commit,
               sourceCommit: integration.sourceCommit,
               alreadyMerged: integration.alreadyMerged,
+              strategy: integration.strategy,
               task: merged,
             });
           }

@@ -21,7 +21,7 @@
 | M1 Найм и работа | ✅ happy path | hire/assign/wait/check + ledger |
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
-| M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge работают |
+| M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge; 3 параллельных задачи live `m_a5669cde`; conflict strategy `abort/theirs` |
 | M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
 | M6 Универсальные классы | ✅ | 10 шаблонов планов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research mission `m_e6049e51` |
 | M7 Закалка | ⚪ не начат | — |
@@ -288,6 +288,7 @@ scripts/
 tests/
   plan.test.ts
   classes.test.ts
+  integrate.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -342,7 +343,8 @@ tests/
 - [x] Изоляция воркеров: `session.move` + bounded polling фактического `location`; hire fail-closed при несовпадении каталога.
 - [x] Class-aware verdict: `code/data/ops` требуют `checked: diff+tests`; research/writing/design/review/planning/creative/mixed — `acceptance+evidence`; review и audit промпты обновлены.
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
-- [x] Версия `0.4.0`, 25 инструментов, 47 тестов.
+- [x] `squad_integrate` strategy: `abort` (по умолчанию) и `theirs` (авто-разрешение конфликта в пользу воркера), результат пишет strategy.
+- [x] Версия `0.4.0`, 25 инструментов, 49 тестов.
 
 **Проверки**
 
@@ -363,6 +365,7 @@ tests/
 | `squad_image` с `opencode/gpt-image-2.5-sunburst` | ⛔ `Generate.ProviderRequestError: This API key has expired` — вызов дошёл до провайдера, ключ окружения просрочен |
 | Stress 3 задачи (до фикса) | ❌ все три воркера писали в `dev`, не в worktree; p1–p3 откачены |
 | Isolation probe (после фикса) | ✅ implementer session `ses_e262e346dffe3W5zcoDmsItVVR` → worktree `squad-implementer-ed8b1a` |
+| Stress 3 задачи (после фикса) | ✅ mission `m_a5669cde`: 3 worktrees, 3 сессии running, 3 G3 pass, 3 cherry-pick, audit pass, mission `done`, cost `$0.020933934` |
 
 **Найдено**
 
