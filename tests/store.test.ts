@@ -390,4 +390,18 @@ describe("SquadStore", () => {
       true,
     );
   });
+
+  test("abortMission cancels open tasks and records the reason", () => {
+    const mission = store.createMission("Abort mission");
+    store.submitPlan(mission.id, plan);
+    store.approvePlan(mission.id);
+
+    const aborted = store.abortMission(mission.id, "operator cancelled the run");
+    expect(aborted.status).toBe("aborted");
+    expect(store.requireTask(mission.id, "t_001").status).toBe("cancelled");
+    expect(store.listEvents(mission.id).some((event) => event.type === "mission.aborted")).toBe(
+      true,
+    );
+    expect(() => store.abortMission(mission.id, "again")).toThrow("cannot abort");
+  });
 });

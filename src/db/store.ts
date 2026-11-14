@@ -934,6 +934,29 @@ export class SquadStore {
     return this.requireMission(missionID);
   }
 
+  abortMission(missionID: string, reason: string): Mission {
+    if (!reason.trim()) throw new Error("abort reason is required");
+    const mission = this.requireMission(missionID);
+    if (["done", "failed", "aborted"].includes(mission.status)) {
+      throw new Error(`cannot abort mission in status ${mission.status}`);
+    }
+    const timestamp = now();
+    const abort = this.db.transaction(() => {
+      this.db
+        .query(`UPDATE missions SET status = 'aborted', updated_at = ? WHERE id = ?`)
+        .run(timestamp, missionID);
+      this.db
+        .query(
+          `UPDATE tasks SET status = 'cancelled', updated_at = ?
+           WHERE mission_id = ? AND status NOT IN ('integrated', 'cancelled')`,
+        )
+        .run(timestamp, missionID);
+      this.addEvent(missionID, null, "mission.aborted", { reason: reason.trim() });
+    });
+    abort();
+    return this.requireMission(missionID);
+  }
+
   listEvents(missionID: string, limit = 100) {
     const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 500));
     return this.db

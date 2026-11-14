@@ -6,6 +6,7 @@ import { registerAppraiseTool } from "./tools/appraise";
 import { registerAssignTool } from "./tools/assign";
 import { registerAuditTool } from "./tools/audit";
 import { registerBudgetTool } from "./tools/budget";
+import { registerCancelTool } from "./tools/cancel";
 import { registerCareerTool } from "./tools/career";
 import { registerCapabilitiesTool } from "./tools/capabilities";
 import { registerCheckTool } from "./tools/check";
@@ -63,6 +64,7 @@ export default Plugin.define({
       registerTemplateTool(ctx),
       registerImageTool(ctx, store),
       registerCapabilitiesTool(ctx),
+      registerCancelTool(ctx, store),
     ]);
 
     let rpcRegistration:

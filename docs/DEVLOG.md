@@ -203,7 +203,7 @@
 
 ```text
 src/
-  index.ts              Plugin.define + 25 tools + RPC
+  index.ts              Plugin.define + 26 tools + RPC
   version.ts            0.4.0
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
@@ -232,6 +232,7 @@ src/
   tools/template.ts     squad_template
   tools/capabilities.ts squad_capabilities
   tools/image.ts        squad_image
+  tools/cancel.ts       squad_cancel
   tools/budget.ts       squad_budget
   tools/hire.ts         squad_hire
   tools/staff.ts        squad_staff
@@ -289,6 +290,7 @@ tests/
   plan.test.ts
   classes.test.ts
   integrate.test.ts
+  wait.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -344,7 +346,8 @@ tests/
 - [x] Class-aware verdict: `code/data/ops` требуют `checked: diff+tests`; research/writing/design/review/planning/creative/mixed — `acceptance+evidence`; review и audit промпты обновлены.
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
 - [x] `squad_integrate` strategy: `abort` (по умолчанию) и `theirs` (авто-разрешение конфликта в пользу воркера), результат пишет strategy.
-- [x] Версия `0.4.0`, 25 инструментов, 49 тестов.
+- [x] `squad_cancel`: аварийное завершение миссии с причиной; non-integrated задачи → `cancelled`, merged работа сохраняется.
+- [x] Версия `0.4.0`, 26 инструментов, 51 тест.
 
 **Проверки**
 
@@ -366,6 +369,10 @@ tests/
 | Stress 3 задачи (до фикса) | ❌ все три воркера писали в `dev`, не в worktree; p1–p3 откачены |
 | Isolation probe (после фикса) | ✅ implementer session `ses_e262e346dffe3W5zcoDmsItVVR` → worktree `squad-implementer-ed8b1a` |
 | Stress 3 задачи (после фикса) | ✅ mission `m_a5669cde`: 3 worktrees, 3 сессии running, 3 G3 pass, 3 cherry-pick, audit pass, mission `done`, cost `$0.020933934` |
+| Conflict test | ✅ mission `m_ad1af5b1`: c1 → `51e49bd`; c2 abort → cherry-pick conflict; strategy `theirs` → `ec3da39`; audit pass; mission `done`, cost `$0.02188912` |
+| Stuck rework (reviewer fail) | ✅ c2 fail по BOM → rework → pass → integrate; attempts 1 |
+| Timeout live via shell | ❌ `session.shell` не держит `session.wait`: wait вернулся сразу и записал пустой report |
+| Timeout branch unit | ✅ `tests/wait.test.ts`: timedOut, task failed, ledger $0.01, interrupt вызван |
 
 **Найдено**
 
@@ -376,24 +383,24 @@ tests/
 5. `research_synthesize` worktree создан для writer (access=write), хотя файл вне worktree; интеграция зафиксирует пустой cherry-pick как alreadyMerged.
 6. **Критично:** дочерняя сессия игнорирует `location` в `session.create` и наследует каталог родителя (`dev`), поэтому writer-воркеры писали в main. Исправлено: `session.move` + bounded polling `session.get` до фактического worktree; hire падает fail-closed, если каталог не совпал. Первый stress-прогон признан невалидным, коммиты p1–p3 откачены (`5fdc6ab`, `7db4a03`, `b40387c`).
 7. `session.prompt` принимает `skills: [{id}]`; assign теперь прикрепляет доступные skill-capabilities напрямую, а не только текстом.
+8. Cherry-pick конфликт воспроизведён на `m_ad1af5b1`: `abort` оставляет main чистым и task не merged; `theirs` разрешает конфликт и пишет strategy в результат; mission доходит до `done`.
+9. Ревизор обоснованно зафейлил c2 из-за BOM: в рабочем файле был `EF BB BF 43 32`, хотя blob в HEAD — чистый `43 32`; `git status` при этом чистый, потому что Git normalizes BOM на hash-object. Rework с явным UTF8 без BOM прошёл.
+10. `session.wait` ждёт model work, но не `session.shell`; удержать сессию 600-секундным shell для live timeout не удалось. Timeout-ветка покрыта `tests/wait.test.ts` с fake session.
 
 **Открытые вопросы**
 
 - TUI panel code готов, но живой визуальный прогон `/squad` → approve/reject ещё не выполнен.
 - RPC `state` в shared service был недоступен, пока plugin location не прогрет; TUI использует тот же сервер, где plugin загружен.
 - `squad_image` заблокирован просроченным OpenCode API key; нужен валидный ключ для реальной генерации.
-- `m_e6049e51` завершена: оба task integrated, audit pass, mission `done`, cost `$0.036150276`.
-- Dispute `rule` live-тест не проведён (unit-тест покрывает).
+- Live timeout через `session.shell` невозможен: `session.wait` не ждёт shell; ветка покрыта unit-тестом.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
-- Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
-- Параллельный найм технически возможен, но stress-тест 3+ задач не проводился.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.
 - `.squad/squad.db` project-local.
+- Тестовые миссии `m_5e2b1f16` (invalid stress) и `m_244bbc9f` (isolation) нужно закрыть через `squad_cancel`.
 
 **Дальше**
 
-1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-2. **Design class live** — после замены API key: `squad_image` + design template + review.
-3. Stress-тест 3 параллельных задач и live dispute `rule`.
-4. Live-тест timeout + замена зависшего сотрудника.
-5. M7: chaos-тесты, docs, release.
+1. Закрыть тестовые миссии `squad_cancel`, проверить, что не осталось активных миссий.
+2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
+3. **Design class live** — после замены API key: `squad_image` + design template + review.
+4. M7: chaos-тесты, docs, release.
