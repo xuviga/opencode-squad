@@ -338,7 +338,8 @@ tests/
 - [x] `PlanTask.capabilities`; миграция 008 `tasks.capabilities_json`; capabilities сохраняются при submit и видны в task/report.
 - [x] `src/capabilities.ts`: резолв `skill:`, `mcp:`, `tool:` и bare-имён; статус available, предупреждения, guidance-строки.
 - [x] `squad_capabilities`: проверка доступности скиллов, MCP-серверов и инструментов до планирования.
-- [x] `squad_assign` объединяет capabilities задачи и аргумента, добавляет guidance в brief и prompt, возвращает resolution и warnings.
+- [x] `squad_assign` объединяет capabilities задачи и аргумента, добавляет guidance в brief и prompt, прикрепляет доступные skills через `session.prompt({skills})`, возвращает resolution и warnings.
+- [x] Изоляция воркеров: `session.move` + bounded polling фактического `location`; hire fail-closed при несовпадении каталога.
 - [x] Class-aware verdict: `code/data/ops` требуют `checked: diff+tests`; research/writing/design/review/planning/creative/mixed — `acceptance+evidence`; review и audit промпты обновлены.
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
 - [x] Версия `0.4.0`, 25 инструментов, 47 тестов.
@@ -360,6 +361,8 @@ tests/
 | Finalize | ✅ mission `m_e6049e51` → `done`, cost `$0.036150276` |
 | `squad_image` без модели | ✅ понятная ошибка: no image model configured |
 | `squad_image` с `opencode/gpt-image-2.5-sunburst` | ⛔ `Generate.ProviderRequestError: This API key has expired` — вызов дошёл до провайдера, ключ окружения просрочен |
+| Stress 3 задачи (до фикса) | ❌ все три воркера писали в `dev`, не в worktree; p1–p3 откачены |
+| Isolation probe (после фикса) | ✅ implementer session `ses_e262e346dffe3W5zcoDmsItVVR` → worktree `squad-implementer-ed8b1a` |
 
 **Найдено**
 
@@ -368,6 +371,8 @@ tests/
 3. `websearch` в standalone `--auto` вернул `Web search cancelled`; worker использовал `webfetch` и всё равно собрал evidence.
 4. Worker записал артефакт в `%TEMP%/opencode/m_e6049e51/`, а не в worktree; worktree остался без коммита, поэтому finalize требует integrate.
 5. `research_synthesize` worktree создан для writer (access=write), хотя файл вне worktree; интеграция зафиксирует пустой cherry-pick как alreadyMerged.
+6. **Критично:** дочерняя сессия игнорирует `location` в `session.create` и наследует каталог родителя (`dev`), поэтому writer-воркеры писали в main. Исправлено: `session.move` + bounded polling `session.get` до фактического worktree; hire падает fail-closed, если каталог не совпал. Первый stress-прогон признан невалидным, коммиты p1–p3 откачены (`5fdc6ab`, `7db4a03`, `b40387c`).
+7. `session.prompt` принимает `skills: [{id}]`; assign теперь прикрепляет доступные skill-capabilities напрямую, а не только текстом.
 
 **Открытые вопросы**
 

@@ -1,5 +1,6 @@
 import type { Plugin } from "@opencode/plugin";
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { DEFAULT_CONFIG } from "../config";
 import type { SquadStore, Staff } from "../db/store";
 import { gradeOrDefault, personaPermissions, resolvePersona } from "../personas";
@@ -69,7 +70,29 @@ export async function hireEmployee(
       location: { directory: worktreeDirectory ?? ctx.location.directory },
       permissions: personaPermissions(spec.access),
     });
+
+    // The host may inherit the parent location for child sessions and ignore
+    // the location argument. Move explicitly so a writer cannot touch main.
+    if (worktreeDirectory) {
+      await ctx.session.move({ sessionID: session.id, directory: worktreeDirectory });
+      let actualDirectory = "";
+      const expectedDirectory = resolve(worktreeDirectory);
+      for (let attempt = 0; attempt < 25; attempt += 1) {
+        const current = await ctx.session.get({ sessionID: session.id });
+        actualDirectory = current.location.directory;
+        if (resolve(actualDirectory) === expectedDirectory) break;
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
+      }
+      if (resolve(actualDirectory) !== expectedDirectory) {
+        throw new Error(
+          `session isolation failed: expected ${expectedDirectory}, got ${actualDirectory}`,
+        );
+      }
+    }
   } catch (error) {
+    if (session) {
+      await ctx.session.remove({ sessionID: session.id }).catch(() => undefined);
+    }
     if (worktreeDirectory) {
       await ctx.worktree
         .remove({ projectID, directory: worktreeDirectory, force: true })

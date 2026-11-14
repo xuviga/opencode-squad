@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode/plugin";
+import { Skill } from "@opencode/schema/skill";
 import { resolveCapabilities } from "../capabilities";
 import type { SquadStore } from "../db/store";
 import { fail, ok } from "./result";
@@ -115,11 +116,16 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
 
           const assigned = store.assignTask(args.mission_id, args.task_id, args.staff_id, brief);
 
+          const skillAttachments = capabilityResolution.resolved
+            .filter((item) => item.kind === "skill" && item.available)
+            .map((item) => ({ id: Skill.ID.make(item.id) }));
+
           try {
             await ctx.session.prompt({
               sessionID,
               text: prompt,
               delivery: "queue",
+              ...(skillAttachments.length > 0 ? { skills: skillAttachments } : {}),
             });
           } catch (error) {
             store.failTask(args.mission_id, args.task_id, "prompt admission failed");
