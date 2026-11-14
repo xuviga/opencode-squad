@@ -1592,6 +1592,24 @@ export class SquadStore {
       .run(staffID, delta, note, timestamp);
   }
 
+  tuiState(missionID?: string) {
+    const missions = this.listMissions(20);
+    const mission = missionID ? this.requireMission(missionID) : missions[0];
+    const tasks = mission ? this.listTasks(mission.id) : [];
+    return {
+      generatedAt: now(),
+      missions,
+      mission: mission ?? null,
+      plan: mission ? this.getPlan(mission.id) : null,
+      tasks: tasks.map(({ brief, rawReport, ...task }) => task),
+      staff: this.listStaff(50),
+      budget: mission ? this.budgetSummary(mission.id) : this.budgetSummary(),
+      audits: mission ? this.listAudits(mission.id) : [],
+      disputes: mission ? this.listDisputes(mission.id) : [],
+      lessons: mission ? this.listLessons(mission.id) : [],
+    };
+  }
+
   countMissions(): number {
     const row = this.db.query("SELECT COUNT(*) AS count FROM missions").get() as {
       count: number;

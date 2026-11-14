@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 ✅ · M5 core ✅ · integration gate ✅**; TUI/M6 universal впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · integration gate ✅**; TUI live check, M6 universal впереди
 
 ## Как ведётся журнал
 
@@ -17,7 +17,7 @@
 | Этап | Статус | Примечание |
 |---|---|---|
 | M0.0 Capability probe | ✅ завершён | probe-плагин и standalone probe работают |
-| M0 Каркас + TUI + план-гейт | 🟡 server-side готов | SQLite, mission/plan/budget, план-гейт; TUI нет |
+| M0 Каркас + TUI + план-гейт | 🟡 TUI code ready | SQLite, mission/plan/budget, plan gate, TUI panel + `/squad` + RPC; live visual check не проведён |
 | M1 Найм и работа | ✅ happy path | hire/assign/wait/check + ledger |
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
@@ -179,6 +179,25 @@
 - P2 (no merge evidence): fixed — `squad_integrate` cherry-pick + `integration.merged` + `merged_at`.
 - P3 (reused report capture): fixed — review/check reject a report captured before `assignedAt`; `squad_wait` records a fresh capture.
 
+### 2026-11-14 · Сессия 8 — TUI panel + RPC
+
+**Сделано**
+
+- [x] `src/rpc.ts`: `SquadRpc` (`state`, `plan`), portable JSON Schema.
+- [x] Server `ctx.rpc.register`; `rpcState` в `squad_status`.
+- [x] `src/tui.tsx`: TUI plugin `squad.tui`, команда `/squad`, `session.panel` slot.
+- [x] Панель: mission, status, plan v, cost, tasks, staff, audits, budget anomaly; polling 1.5s.
+- [x] `a` approve · `r` reject · `escape` close; approve/reject через RPC.
+- [x] `package.json` exports `./tui` и `./rpc`; peers `@opentui/core`, `@opentui/solid`, `solid-js`, `@opencode/theme`.
+- [x] Установлены `@opentui/core@0.8.4`, `@opentui/solid@0.8.4`, `solid-js@1.9.19`, `@opencode/theme@2.3.0`.
+- [x] 39 тестов, typecheck.
+
+**Проверки**
+
+- `squad_status` в standalone: `rpc.registered = true`.
+- RPC `state` в shared service: `RPC is unavailable: squad`, пока plugin location не прогрет; TUI подключается к тому же серверу, где plugin загружен.
+- Живой визуальный TUI-прогон (`/squad` → panel → approve) ещё не выполнен.
+
 **Структура**
 
 ```text
@@ -191,6 +210,8 @@ src/
   verdict.ts            Verdict + pass/fail правила
   ruling.ts             Ruling арбитра + parser
   process-audit.ts      process audit schema/parser
+  rpc.ts                SquadRpc state/plan contract
+  tui.tsx               TUI plugin: /squad panel, approve/reject
   json.ts               последний JSON-объект
   personas.ts           персоны, грейды, agent mapping, permissions
   runtime/probe.ts      M0.0 probe
@@ -250,6 +271,7 @@ scripts/
   session-inspect.ts
   session-dump.ts
   recover-review.ts
+  rpc-state.ts
 tests/
   plan.test.ts
   report.test.ts
@@ -275,6 +297,8 @@ tests/
 | M5 audit live | ✅ second review `pass/low`, audit `a_ae53e211`, cost `$0.00154968` |
 | M5 process audit live | ❌ fail с 3 findings: audit after done, no merge event, one report capture across 3 rounds; cost `$0.0042789` |
 | M6 integration smoke | ✅ worker `40d5f8f` → main `77847d3`, audit pass, mission `done`, budget `$0.00628` |
+| RPC registration | ✅ `squad_status.rpc.registered = true` в standalone |
+| TUI live panel | ⚪ не проведён: `/squad`, approve/reject, visual |
 
 **Найдено и исправлено**
 
@@ -292,21 +316,19 @@ tests/
 
 **Открытые вопросы**
 
-- TUI-панель M0 ещё не начата.
+- TUI panel code готов, но живой визуальный прогон `/squad` → approve/reject ещё не выполнен.
+- RPC `state` в shared service был недоступен, пока plugin location не прогрет; TUI использует тот же сервер, где plugin загружен.
 - Dispute `rule` live-тест не проведён (unit-тест покрывает).
-- ✅ P1: finalize требует second-review audit; audit gate enforced.
-- ✅ P2: `squad_integrate` cherry-pick + `integration.merged` + `merged_at`; main commit записан.
-- ✅ P3: review/check отклоняют stale report; `squad_wait` пишет `report_captured_at`.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
 - Параллельный найм технически возможен, но stress-тест 3+ задач не проводился.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.
 - `.squad/squad.db` project-local.
-- Git: `7f4ffed` (integration gate), `5f8066a` (M6 prompt), `77847d3` (worker cherry-pick); docs fix — следующий коммит.
+- Git: `a077ca5` (docs P1–P3); TUI — следующий коммит.
 
 **Дальше**
 
-1. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
+1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
 2. **M6 universal classes** — research/writing/design/data/ops/creative + скиллы/MCP.
 3. Live dispute rule + stress-тест 3 параллельных задач.
 4. Live-тест timeout + замена зависшего сотрудника.

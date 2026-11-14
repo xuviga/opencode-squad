@@ -3,6 +3,11 @@ import { DEFAULT_CONFIG, type Grade } from "../config";
 import type { SquadStore } from "../db/store";
 import { VERSION } from "../version";
 
+export type RpcRuntimeState = {
+  registered: boolean;
+  error?: string;
+};
+
 function gradeSnapshot() {
   return Object.entries(DEFAULT_CONFIG.grades).map(([grade, model]) => ({
     grade: grade as Grade,
@@ -10,7 +15,11 @@ function gradeSnapshot() {
   }));
 }
 
-export async function registerStatusTool(ctx: Plugin.Context, store: SquadStore) {
+export async function registerStatusTool(
+  ctx: Plugin.Context,
+  store: SquadStore,
+  rpcState: RpcRuntimeState = { registered: false },
+) {
   return ctx.tool.transform((editor) => {
     editor.namespace({
       name: "squad",
@@ -59,6 +68,7 @@ export async function registerStatusTool(ctx: Plugin.Context, store: SquadStore)
           plugin: "squad",
           version: VERSION,
           loadedAt: new Date().toISOString(),
+          rpc: rpcState,
           location: {
             directory: ctx.location.directory,
             workspaceID: ctx.location.workspaceID,

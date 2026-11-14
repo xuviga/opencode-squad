@@ -1,6 +1,7 @@
 import { Plugin } from "@opencode/plugin";
 import { openSquadDb } from "./db/index";
 import { SquadStore } from "./db/store";
+import { SquadRpc } from "./rpc";
 import { registerAppraiseTool } from "./tools/appraise";
 import { registerAssignTool } from "./tools/assign";
 import { registerAuditTool } from "./tools/audit";
@@ -20,6 +21,7 @@ import { registerReviewTool } from "./tools/review";
 import { registerScorecardTool } from "./tools/scorecard";
 import { registerStaffTool } from "./tools/staff";
 import { registerStatusTool } from "./tools/status";
+import type { RpcRuntimeState } from "./tools/status";
 import { registerTasksTool } from "./tools/tasks";
 import { registerVerdictTool } from "./tools/verdict";
 import { registerWaitTool } from "./tools/wait";
@@ -30,9 +32,10 @@ export default Plugin.define({
   async setup(ctx) {
     const db = openSquadDb(ctx.location.directory);
     const store = new SquadStore(db);
+    const rpcState: RpcRuntimeState = { registered: false };
 
     const registrations = await Promise.all([
-      registerStatusTool(ctx, store),
+      registerStatusTool(ctx, store, rpcState),
       registerProbeTool(ctx),
       registerMissionTool(ctx, store),
       registerPlanTool(ctx, store),
@@ -56,6 +59,33 @@ export default Plugin.define({
       registerIntegrateTool(ctx, store),
     ]);
 
+    let rpcRegistration:
+      | Awaited<ReturnType<typeof ctx.rpc.register>>
+      | undefined;
+    try {
+      rpcRegistration = await ctx.rpc.register(SquadRpc, {
+        state: async (input) => {
+          const args = (input ?? {}) as { mission_id?: string };
+          return store.tuiState(args.mission_id);
+        },
+        plan: async (input) => {
+          const args = (input ?? {}) as {
+            mission_id: string;
+            action: "approve" | "reject";
+            note?: string;
+          };
+          if (args.action === "approve") {
+            return { mission: store.approvePlan(args.mission_id, args.note ?? "") };
+          }
+          return { mission: store.rejectPlan(args.mission_id, args.note ?? "") };
+        },
+      });
+      rpcState.registered = true;
+    } catch (error) {
+      rpcState.error = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.error("[squad] rpc failed", error);
+    }
+
     console.log(
       `[squad] v${VERSION} loaded at ${ctx.location.directory} (OpenCode ${ctx.app.version})`,
     );
@@ -64,6 +94,7 @@ export default Plugin.define({
       for (const registration of registrations) {
         await registration.dispose();
       }
+      await rpcRegistration?.dispose();
       db.close();
     };
   },
