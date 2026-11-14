@@ -489,3 +489,26 @@ tests/
 1. Опционально: image-generation API при валидной image-модели.
 2. Процессный аудит по расписанию и отчёт по бюджету в TUI.
 3. Тег `v0.7.0`, release notes в `CHANGELOG.md`.
+
+### 2026-11-14 · Сессия 12 — глобальное подключение
+
+**Сделано**
+
+- [x] `~/.config/opencode/opencode.json`: добавлен `D:\codex\opencode-squad` в `plugins` (server-часть).
+- [x] `~/.config/opencode/cli.json`: путь к плагину для TUI-части.
+- [x] `dev/opencode.jsonc` очищен от локального `plugins: [".."]`, иначе в dev грузились две копии: `externalPlugins=3`, второй squad `failed/package`.
+- [x] `bun install`, `bun run typecheck`, `bun test` — сборка/контракты зелёные.
+
+**Проверки**
+
+| Сценарий | Результат |
+|---|---|
+| Temp dir без project config | ✅ `squad` 0.7.0, `rpc.registered:true`, 28 tools, `externalPlugins:2` |
+| Dev после очистки project plugins | ✅ `squad` ровно один раз, 28 tools, `externalPlugins:2` |
+| TUI live с глобальным плагином | ✅ `/squad`, reject `draft`, approve `staffing` |
+| Global config backup | ✅ `opencode.json.bak-*` |
+
+**Дальше**
+
+1. Пользоваться SQUAD из любого проекта через глобальный плагин.
+2. При обновлении плагина проверять `opencode plugin list` и `squad_status`.

@@ -1,4 +1,5 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": [".."]
+  "$schema": "https://opencode.ai/config.json"
+  // SQUAD is connected globally in ~/.config/opencode/opencode.json.
+  // Keeping a project-level copy here would load the plugin twice in dev.
 }

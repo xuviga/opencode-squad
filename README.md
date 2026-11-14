@@ -20,14 +20,25 @@
 
 ## Установка
 
-Плагин подключается как локальный пакет:
+Сборка не требуется: OpenCode загружает TypeScript-исходники напрямую. Достаточно `bun install` и проверок `bun run typecheck` / `bun test`.
+
+Server-часть подключается глобально:
 
 ```jsonc
-// opencode.jsonc
+// ~/.config/opencode/opencode.json
 {
   "plugins": ["D:/path/to/opencode-squad"]
 }
 ```
+
+TUI-часть — в `cli.json`:
+
+```jsonc
+// ~/.config/opencode/cli.json
+{ "plugins": ["D:/path/to/opencode-squad"] }
+```
+
+Не добавляйте тот же путь ещё и в project `opencode.jsonc`, если он уже есть глобально: плагин загрузится дважды.
 
 Требования:
 
@@ -35,15 +46,6 @@
 - Bun;
 - `@opencode/plugin` `2.3.0` (exact pin);
 - для TUI-панели — `@opentui/core`, `@opentui/solid`, `solid-js`, `@opencode/theme`.
-
-TUI-часть локального пакета грузится через глобальный `cli.json`:
-
-```jsonc
-// ~/.config/opencode/cli.json
-{ "plugins": ["D:/path/to/opencode-squad"] }
-```
-
-Project `opencode.jsonc` загружает server-часть; `cli.json` — TUI-часть.
 
 ## Быстрый старт
 
