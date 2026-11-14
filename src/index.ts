@@ -7,6 +7,7 @@ import { registerBudgetTool } from "./tools/budget";
 import { registerCareerTool } from "./tools/career";
 import { registerCheckTool } from "./tools/check";
 import { registerFireTool } from "./tools/fire";
+import { registerFinalizeTool } from "./tools/finalize";
 import { registerHireTool } from "./tools/hire";
 import { registerMissionTool } from "./tools/mission";
 import { registerPlanTool } from "./tools/plan";
@@ -16,6 +17,7 @@ import { registerReviewTool } from "./tools/review";
 import { registerScorecardTool } from "./tools/scorecard";
 import { registerStaffTool } from "./tools/staff";
 import { registerStatusTool } from "./tools/status";
+import { registerTasksTool } from "./tools/tasks";
 import { registerVerdictTool } from "./tools/verdict";
 import { registerWaitTool } from "./tools/wait";
 import { VERSION } from "./version";
@@ -44,6 +46,8 @@ export default Plugin.define({
       registerFireTool(ctx, store),
       registerScorecardTool(ctx, store),
       registerCareerTool(ctx, store),
+      registerTasksTool(ctx, store),
+      registerFinalizeTool(ctx, store),
     ]);
 
     console.log(

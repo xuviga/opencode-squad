@@ -44,9 +44,21 @@ export async function registerFireTool(ctx: Plugin.Context, store: SquadStore) {
           if (staff.sessionID) {
             await ctx.session.remove({ sessionID: staff.sessionID }).catch(() => undefined);
           }
+          let worktreeRemoved = false;
+          if (staff.worktreeDirectory) {
+            worktreeRemoved = await ctx.worktree
+              .remove({
+                projectID: ctx.location.project.id,
+                directory: staff.worktreeDirectory,
+                force: false,
+              })
+              .then(() => true)
+              .catch(() => false);
+          }
           return ok({
             staff,
             blacklisted: store.isBlacklisted(staff.persona, staff.grade),
+            worktree_removed: worktreeRemoved,
           });
         } catch (error) {
           return fail(error);

@@ -140,4 +140,12 @@ CREATE INDEX IF NOT EXISTS idx_appraisals_staff ON appraisals(staff_id, created_
 CREATE INDEX IF NOT EXISTS idx_blacklist_persona_grade ON blacklist(persona, grade, expires_at);
 `,
   },
+  {
+    version: 5,
+    name: "worktrees",
+    sql: `
+ALTER TABLE staff ADD COLUMN worktree_directory TEXT;
+CREATE INDEX IF NOT EXISTS idx_staff_worktree ON staff(worktree_directory);
+`,
+  },
 ];

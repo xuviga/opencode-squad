@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅**; TUI, M4+ впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 happy path ✅**; TUI, M5+ впереди
 
 ## Как ведётся журнал
 
@@ -21,7 +21,7 @@
 | M1 Найм и работа | ✅ happy path | hire/assign/wait/check + ledger |
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
-| M4 Параллель и изоляция | ⚪ не начат | worktree/DAG |
+| M4 Параллель и изоляция | 🟡 happy path | worktree/DAG/finalize/radar работают; conflict merge и parallel stress не тестировались |
 | M5 Споры, арбитр, аудитор | ⚪ не начат | — |
 | M6 Универсальные классы | ⚪ не начат | — |
 | M7 Закалка | ⚪ не начат | — |
@@ -101,6 +101,35 @@
   - fire с `evidence_ref: dev/M3_PROMPT.md` → status `fired`, `blacklisted: true`;
   - повторный hire scribe/G1 → `Error: persona/grade is blacklisted: scribe/G1`.
 
+### 2026-11-14 · Сессия 5 — M4: worktree, DAG, finalize gate, budget radar
+
+**Сделано**
+
+- [x] Migration 005: `staff.worktree_directory`.
+- [x] `hireEmployee` создаёт worktree для write/shell-персон; reviewer остаётся в main.
+- [x] `hire` возвращает `worktree_directory`; `fire` удаляет worktree.
+- [x] `src/runtime/diff.ts`: per-task diff из worktree.
+- [x] DAG: план с зависимостями создаёт `ready`/`pending`; `assignTask` проверяет зависимости; `advanceDependents` открывает следующие задачи.
+- [x] `squad_tasks` — список задач и готовности.
+- [x] `mission.integrating` + `squad_finalize` — глобальный гейт перед `done`.
+- [x] `budgetSummary`: ratio, warnings 70/90 %, anomaly > 3×.
+- [x] 28 unit-тестов (DAG + radar добавлены).
+
+**M4 live result**
+
+- Mission `m_e872b7f0`, implementer `s_d56ce7b4` (G2), worktree `C:\Users\XuViGaN\.local\share\opencode\worktree\5cec9b\squad-implementer-145026`.
+- Worker создал и закоммитил `dev/m4-proof.txt` с `M4_OK`.
+- `squad_check` вернул `source: git-worktree`, файл `dev/m4-proof.txt`, patch `+M4_OK`.
+- Reviewer pass/low; task `integrated`; mission `integrating`; `squad_finalize` → `done`.
+- Budget: `$0.010374` vs `$0.010000` expected; ratio 1.037; warnings 70/90; anomaly false.
+
+**Ключевая находка**
+
+- `ctx.vcs.diff({ location })` **игнорирует** location в plugin context (в client API — уважает).
+- `ctx.session.diff` в runtime plugin context недоступен.
+- `session.location` может показывать project root, а не worktree.
+- Решение: для worktree читать `git diff HEAD^`/`git diff`/`git status` через `child_process`; для main — `ctx.vcs.diff`. Reviewer видит committed changes, а не пустой working tree.
+
 **Структура**
 
 ```text
@@ -114,9 +143,10 @@ src/
   json.ts               последний JSON-объект
   personas.ts           персоны, грейды, agent mapping, permissions
   runtime/probe.ts      M0.0 probe
-  runtime/hire.ts       общий hire helper
+  runtime/hire.ts       общий hire helper + worktree
   runtime/messages.ts   assistant text + last assistant
-  db/schema.ts          migrations 001–004
+  runtime/diff.ts       per-task diff: git-worktree / vcs
+  db/schema.ts          migrations 001–005
   db/index.ts           openSquadDb + WAL + миграции
   db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist
   tools/status.ts       squad_status
@@ -136,6 +166,8 @@ src/
   tools/fire.ts         squad_fire
   tools/scorecard.ts    squad_scorecard
   tools/career.ts       squad_career
+  tools/tasks.ts        squad_tasks
+  tools/finalize.ts     squad_finalize
 .opencode/agents/
   squad-reviewer.md     blind reviewer, no tools, steps 2
 dev/
@@ -144,6 +176,10 @@ dev/
   M2_PROMPT.md          M2 smoke
   M2_REWORK.md          M2 rework smoke
   M3_PROMPT.md          M3 smoke
+  M4_PROMPT.md          M4 smoke
+  M4_CONTINUE.md        M4 diff continuation
+  M4_DIAG.md            M4 diff diagnostic
+  M4_FINAL.md           M4 final gate
   one-line-proof.txt    artifact M2
 scripts/
   probe-client.ts
@@ -166,12 +202,13 @@ tests/
 | Команда/сценарий | Результат |
 |---|---|
 | `bun run typecheck` | ✅ без ошибок |
-| `bun test` | ✅ 26 pass, 0 fail, 64 expect |
+| `bun test` | ✅ 28 pass, 0 fail, 76 expect |
 | `bun run probe` | ✅ `SQUAD_PROBE_OK`, cost `$0.000251` |
 | `bun run probe:interrupt` | ✅ `interrupted:true` |
 | M1 live | ✅ writer report `done`, ledger `$0.0023631` |
 | M2 live | ✅ fail → rework → pass → integrated → mission `done` |
 | M3 live | ✅ appraise/fire/blacklist; повторный hire отклонён |
+| M4 live | ✅ worktree `squad-implementer-145026`, git-diff `dev/m4-proof.txt`, pass, mission `done`, budget `$0.010374` |
 
 **Найдено и исправлено**
 
@@ -182,21 +219,23 @@ tests/
 5. `squad_check` при ошибке парсинга не останавливает workflow — smoke продолжился; в реальном боссе это должен быть жёсткий стоп.
 6. `squad_status` слишком многословен; оставлены counts + внешние плагины.
 7. `interrupt` после idle — no-op; отдельный running-interrupt probe проходит.
+8. `ctx.vcs.diff({ location })` игнорирует location, `ctx.session.diff` недоступен; worktree-diff читается через git (`HEAD^` + working), reviewer видит committed changes.
 
 **Открытые вопросы**
 
 - TUI-панель M0 ещё не начата.
 - Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником (unit-тест replacement есть).
-- `ctx.vcs.diff` — diff всего проекта, не per-task; нужен worktree (M4).
-- Радар аномалий не реализован: сбойный ревизор превысил ожидаемый бюджет в 5 раз, предупреждения не было.
+- M4 conflict merge не реализован: `squad_finalize` — гейт статуса, а не слияние worktree в main.
+- Параллельный найм технически возможен, но stress-тест на 3+ одновременных задачах не проводился.
+- Worktree на detached HEAD: коммит worker'а не привязан к ветке; для merge нужен cherry-pick/branch.
 - Re-queue/rework не ограничивает число ревизий на уровне mission (только attempts задачи).
 - `.squad/squad.db` project-local; для глобального штата нужен отдельный data-dir.
-- Git: initial `5cec9b7`, M1 `618aab7`; M2/M3 — следующий коммит.
+- Git: initial `5cec9b7`, M1 `618aab7`, M2/M3 `e5d654c`; M4 — следующий коммит.
 
 **Дальше**
 
-1. **M4** — DAG задач, worktree на писателя, per-task diff, параллельный найм.
-2. **M5** — dispute/arbiter/auditor, выборочные вторые ревизии.
-3. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
-4. Радар аномалий и мягкие пороги бюджета.
+1. **M5** — dispute/arbiter/auditor, выборочные вторые ревизии.
+2. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
+3. M4 merge: cherry-pick/branch worktree → main, conflict detection.
+4. Stress-тест 3 параллельных задач и лимит параллельного найма.
 5. Live-тест timeout + замена зависшего сотрудника.

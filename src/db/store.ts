@@ -39,6 +39,7 @@ export type Staff = {
   model: string | null;
   variant: string | null;
   sessionID: string | null;
+  worktreeDirectory: string | null;
   score: number;
   status: string;
   reason: string | null;
@@ -109,6 +110,7 @@ type StaffRow = {
   model: string | null;
   variant: string | null;
   session_id: string | null;
+  worktree_directory: string | null;
   score: number;
   status: string;
   reason: string | null;
@@ -185,6 +187,7 @@ function mapStaff(row: StaffRow): Staff {
     model: row.model,
     variant: row.variant,
     sessionID: row.session_id,
+    worktreeDirectory: row.worktree_directory,
     score: row.score,
     status: row.status,
     reason: row.reason,
@@ -299,7 +302,7 @@ export class SquadStore {
       const insertTask = this.db.query(
         `INSERT INTO tasks
          (mission_id, id, title, class, role, grade, status, acceptance_json, depends_on_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const task of plan.tasks) {
         insertTask.run(
@@ -309,6 +312,7 @@ export class SquadStore {
           task.class,
           task.role,
           task.grade,
+          task.dependsOn && task.dependsOn.length > 0 ? "pending" : "ready",
           JSON.stringify(task.acceptance),
           JSON.stringify(task.dependsOn ?? []),
           timestamp,
@@ -375,6 +379,7 @@ export class SquadStore {
     model: string;
     variant: string;
     sessionID: string;
+    worktreeDirectory?: string | null;
   }): Staff {
     const id = `s_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
     const timestamp = now();
@@ -382,8 +387,8 @@ export class SquadStore {
       this.db
         .query(
           `INSERT INTO staff
-           (id, persona, grade, agent, provider, model, variant, session_id, score, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?)`,
+           (id, persona, grade, agent, provider, model, variant, session_id, worktree_directory, score, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?)`,
         )
         .run(
           id,
@@ -394,6 +399,7 @@ export class SquadStore {
           input.model,
           input.variant,
           input.sessionID,
+          input.worktreeDirectory ?? null,
           timestamp,
           timestamp,
         );
@@ -454,8 +460,18 @@ export class SquadStore {
       throw new Error(`cannot assign task in mission status ${mission.status}`);
     }
     const task = this.requireTask(missionID, taskID);
-    if (!["pending", "ready", "failed", "returned"].includes(task.status)) {
-      throw new Error(`cannot assign task in status ${task.status}`);
+    if (!["ready", "failed", "returned"].includes(task.status)) {
+      throw new Error(
+        task.status === "pending"
+          ? `task is not ready; dependencies are not integrated: ${taskID}`
+          : `cannot assign task in status ${task.status}`,
+      );
+    }
+    for (const dependency of task.dependsOn) {
+      const dependencyTask = this.requireTask(missionID, dependency);
+      if (dependencyTask.status !== "integrated") {
+        throw new Error(`dependency not integrated: ${dependency}`);
+      }
     }
     const staff = this.requireStaff(staffID);
     if (staff.status !== "active") throw new Error(`staff is not active: ${staffID}`);
@@ -655,8 +671,37 @@ export class SquadStore {
       }
     });
     save();
+    this.advanceDependents(missionID);
     this.maybeFinishMission(missionID);
     return this.requireTask(missionID, taskID);
+  }
+
+  private advanceDependents(missionID: string): void {
+    const tasks = this.listTasks(missionID);
+    const integrated = new Set(
+      tasks.filter((task) => task.status === "integrated").map((task) => task.id),
+    );
+    let advanced = false;
+    for (const task of tasks) {
+      if (task.status !== "pending") continue;
+      if (!task.dependsOn.every((dependency) => integrated.has(dependency))) continue;
+      this.db
+        .query(
+          `UPDATE tasks SET status = 'ready', updated_at = ?
+           WHERE mission_id = ? AND id = ? AND status = 'pending'`,
+        )
+        .run(now(), missionID, task.id);
+      this.addEvent(missionID, task.id, "task.ready", {});
+      advanced = true;
+    }
+    if (advanced) {
+      this.db
+        .query(
+          `UPDATE missions SET status = 'executing', updated_at = ?
+           WHERE id = ? AND status = 'reviewing'`,
+        )
+        .run(now(), missionID);
+    }
   }
 
   private maybeFinishMission(missionID: string): void {
@@ -667,11 +712,30 @@ export class SquadStore {
     if (!tasks.every((task) => task.status === "integrated")) return;
     this.db
       .query(
-        `UPDATE missions SET status = 'done', updated_at = ?
+        `UPDATE missions SET status = 'integrating', updated_at = ?
          WHERE id = ? AND status = 'reviewing'`,
       )
       .run(now(), missionID);
+    this.addEvent(missionID, null, "mission.integrating", {});
+  }
+
+  finalizeMission(missionID: string): Mission {
+    const mission = this.requireMission(missionID);
+    if (mission.status !== "integrating") {
+      throw new Error(`cannot finalize mission in status ${mission.status}`);
+    }
+    const tasks = this.listTasks(missionID);
+    if (tasks.length === 0 || !tasks.every((task) => task.status === "integrated")) {
+      throw new Error("cannot finalize: not all tasks are integrated");
+    }
+    this.db
+      .query(
+        `UPDATE missions SET status = 'done', updated_at = ?
+         WHERE id = ? AND status = 'integrating'`,
+      )
+      .run(now(), missionID);
     this.addEvent(missionID, null, "mission.done", {});
+    return this.requireMission(missionID);
   }
 
   listEvents(missionID: string, limit = 100) {
@@ -965,6 +1029,18 @@ export class SquadStore {
     insert();
   }
 
+  private budgetRadar(expected: number | null, actual: number) {
+    if (expected === null || expected <= 0) {
+      return { ratio: null, warnings: [] as string[], anomaly: false };
+    }
+    const ratio = actual / expected;
+    const warnings: string[] = [];
+    if (ratio >= 0.7) warnings.push("70% of expected");
+    if (ratio >= 0.9) warnings.push("90% of expected");
+    if (ratio > 3) warnings.push("more than 3x expected");
+    return { ratio, warnings, anomaly: ratio > 3 };
+  }
+
   budgetSummary(missionID?: string) {
     if (missionID) {
       const mission = this.requireMission(missionID);
@@ -980,6 +1056,7 @@ export class SquadStore {
         expectedCostUsd: mission.expectedCostUsd,
         actualCostUsd: row.total,
         entries: row.entries,
+        ...this.budgetRadar(mission.expectedCostUsd, row.total),
         mission,
       };
     }
@@ -1000,12 +1077,14 @@ export class SquadStore {
       expectedCostUsd: expected.total,
       actualCostUsd: totals.total,
       entries: totals.entries,
+      ...this.budgetRadar(expected.total, totals.total),
       byMission: missions.map((mission) => ({
         id: mission.id,
         title: mission.title,
         status: mission.status,
         expectedCostUsd: mission.expectedCostUsd,
         actualCostUsd: mission.actualCostUsd,
+        ...this.budgetRadar(mission.expectedCostUsd, mission.actualCostUsd),
       })),
     };
   }

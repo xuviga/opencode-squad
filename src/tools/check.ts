@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { parseReportText } from "../report";
+import { taskDiff } from "../runtime/diff";
 import { fail, ok } from "./result";
 
 type CheckInput = {
@@ -62,7 +63,7 @@ export async function registerCheckTool(ctx: Plugin.Context, store: SquadStore) 
           }
 
           const completed = store.completeTask(args.mission_id, args.task_id, report);
-          const diff = await ctx.vcs.diff({ mode: "working", context: 3 });
+          const diff = await taskDiff(ctx, store, completed);
           return ok({
             task: completed,
             report,

@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import type { PlanGrade } from "../plan";
+import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { fail, ok } from "./result";
 
@@ -85,7 +86,7 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
 
           let diff: unknown;
           try {
-            diff = await ctx.vcs.diff({ mode: "working", context: 3 });
+            diff = await taskDiff(ctx, store, task);
           } catch (error) {
             diff = { error: error instanceof Error ? error.message : String(error) };
           }

@@ -57,7 +57,7 @@ describe("SquadStore", () => {
     expect(submitted.version).toBe(1);
     expect(store.requireMission(mission.id).status).toBe("plan_gate");
     expect(store.listTasks(mission.id)).toHaveLength(1);
-    expect(store.requireTask(mission.id, "t_001").status).toBe("pending");
+    expect(store.requireTask(mission.id, "t_001").status).toBe("ready");
 
     store.approvePlan(mission.id, "ok");
     expect(store.requireMission(mission.id).status).toBe("staffing");
@@ -172,7 +172,8 @@ describe("SquadStore", () => {
     });
 
     expect(store.requireTask(mission.id, "t_001").status).toBe("integrated");
-    expect(store.requireMission(mission.id).status).toBe("done");
+    expect(store.requireMission(mission.id).status).toBe("integrating");
+    expect(store.finalizeMission(mission.id).status).toBe("done");
     const score = store.scorecard(worker.id);
     expect(score.passAt1).toBe(0);
     expect(score.rework).toBe(1);
@@ -194,5 +195,77 @@ describe("SquadStore", () => {
     expect(store.isBlacklisted("implementer", "G2")).toBe(true);
     expect(store.isBlacklisted("implementer", "G3")).toBe(false);
     expect(store.countBlacklist()).toBe(1);
+  });
+
+  test("enforces DAG readiness and opens dependents after integration", () => {
+    const mission = store.createMission("DAG mission");
+    store.submitPlan(mission.id, {
+      goal: "DAG",
+      tasks: [
+        {
+          id: "t_001",
+          title: "First",
+          class: "code",
+          role: "implementer",
+          grade: "G2",
+          acceptance: ["first done"],
+        },
+        {
+          id: "t_002",
+          title: "Second",
+          class: "code",
+          role: "implementer",
+          grade: "G2",
+          acceptance: ["second done"],
+          dependsOn: ["t_001"],
+        },
+      ],
+    });
+    store.approvePlan(mission.id);
+    const worker = hire();
+    const reviewer = store.hireStaff({
+      persona: "reviewer",
+      grade: "G3",
+      agent: "squad-reviewer",
+      provider: "deepseek",
+      model: "deepseek-v4-pro",
+      variant: "high",
+      sessionID: "ses_review_dag",
+    });
+
+    expect(store.requireTask(mission.id, "t_001").status).toBe("ready");
+    expect(store.requireTask(mission.id, "t_002").status).toBe("pending");
+    expect(() => store.assignTask(mission.id, "t_002", worker.id, {})).toThrow("not ready");
+
+    store.assignTask(mission.id, "t_001", worker.id, { goal: "First" });
+    store.markTaskRunning(mission.id, "t_001");
+    store.saveRawReport(mission.id, "t_001", '{"status":"done"}');
+    store.completeTask(mission.id, "t_001", { status: "done" });
+    store.assignReview(mission.id, "t_001", reviewer.id, "ses_review_dag");
+    store.saveVerdict(mission.id, "t_001", {
+      verdict: "pass",
+      severity: "low",
+      findings: [],
+      checked: ["diff", "tests", "acceptance"],
+    });
+
+    expect(store.requireTask(mission.id, "t_001").status).toBe("integrated");
+    expect(store.requireTask(mission.id, "t_002").status).toBe("ready");
+    expect(store.requireMission(mission.id).status).toBe("executing");
+    expect(store.assignTask(mission.id, "t_002", worker.id, { goal: "Second" }).status).toBe(
+      "assigned",
+    );
+  });
+
+  test("flags budget anomaly above 3x expected", () => {
+    const mission = store.createMission("Budget anomaly");
+    store.submitPlan(mission.id, plan);
+    store.approvePlan(mission.id);
+    store.recordLedger({ missionID: mission.id, cost: 0.04 });
+    const budget = store.budgetSummary(mission.id);
+    expect(budget.actualCostUsd).toBeCloseTo(0.04);
+    expect(budget.ratio).toBeCloseTo(4);
+    expect(budget.anomaly).toBe(true);
+    expect(budget.warnings).toContain("more than 3x expected");
   });
 });

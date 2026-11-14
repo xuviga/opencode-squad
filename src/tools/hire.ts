@@ -63,6 +63,7 @@ export async function registerHireTool(ctx: Plugin.Context, store: SquadStore) {
             grade: result.grade,
             model: result.model,
             access: result.access,
+            worktree_directory: result.worktreeDirectory,
           });
         } catch (error) {
           return fail(error);
