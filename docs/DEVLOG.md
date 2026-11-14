@@ -539,3 +539,29 @@ tests/
 
 1. Реальный прогон миссии с `squad_gc` в конце.
 2. Подумать об автоматическом janitor на старте миссии (сейчас только явный вызов).
+
+### 2026-11-14 — Сессия 14 — режим без git (in-place)
+
+**Сделано**
+
+- [x] `missions.isolation` (`worktree | none`) + `tasks.snapshot_directory`, миграция 009.
+- [x] `squad_mission create isolation:"none"` — сотрудники работают прямо в папке, без worktree и git.
+- [x] Снапшот файлов перед задачей (`src/runtime/snapshot.ts`): sha256-манифест + копии текстовых файлов; ревизор получает added/modified/deleted с построчным diff.
+- [x] Класс-зависимые проверки: в in-place для code требуется `diff + acceptance`, в worktree — `diff + tests`.
+- [x] `integrate` помечает задачи merged in place; `finalize`/`audit` не требуют commit ancestry в in-place.
+- [x] Префлайт: `squad_mission create` с worktree в не-git папке падает с инструкцией; `squad_status` отдаёт `isolation.worktreeAvailable`.
+- [x] Живая проверка: миссия `m_5a1c6fd5` (isolation none) → hire без worktree (`worktreeDirectory:null`), затем cancel + удаление сессии. Затрат $0.
+
+**Проверки**
+
+| Сценарий | Результат |
+|---|---|
+| `in-place hire` | ✅ сессия создана, worktree не создавался |
+| `snapshot diff` | ✅ added/modified/deleted, бинарь помечен |
+| `bun test` | ✅ 86 pass / 0 fail, 20 файлов |
+
+**Ограничения**
+
+1. In-place не изолирует параллельных писателей — запускать последовательно.
+2. Нет коммита/истории: откат изменений вручную.
+3. Снапшот не хранит файлы >2 МБ и бинарники (только факт изменения).

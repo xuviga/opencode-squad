@@ -36,7 +36,8 @@ export async function registerFinalizeTool(ctx: Plugin.Context, store: SquadStor
           });
 
           const tasks = store.listTasks(args.mission_id);
-          const evidence = missionEvidence(ctx.location.directory, tasks);
+          const isolation = store.requireMission(args.mission_id).isolation;
+          const evidence = missionEvidence(ctx.location.directory, tasks, { isolation });
           if (!evidence.ok) {
             throw new Error(
               `cannot finalize: integration evidence failed: ${evidence.problems.join("; ")}`,

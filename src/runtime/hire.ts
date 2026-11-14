@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { DEFAULT_CONFIG } from "../config";
 import type { SquadStore, Staff } from "../db/store";
 import { gradeOrDefault, personaPermissions, resolvePersona } from "../personas";
+import { isGitRepository } from "./git";
 
 export type HireRequest = {
   missionID: string;
@@ -37,10 +38,17 @@ export async function hireEmployee(
   const model = DEFAULT_CONFIG.grades[grade];
   const agent = request.agent?.trim() || spec.agent;
   const projectID = ctx.location.project.id;
-  const needsWorktree = spec.access !== "read-only";
+  const mission = store.requireMission(request.missionID);
+  const needsWorktree = mission.isolation !== "none" && spec.access !== "read-only";
 
   let worktreeDirectory: string | null = null;
   if (needsWorktree) {
+    if (!isGitRepository(ctx.location.directory)) {
+      throw new Error(
+        `worktree isolation needs a git repository, but ${ctx.location.directory} is not one; ` +
+          `create the mission with isolation:"none" or run git init and reopen OpenCode`,
+      );
+    }
     try {
       const worktree = await ctx.worktree.create({
         projectID,

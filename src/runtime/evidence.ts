@@ -1,9 +1,14 @@
 import { spawnSync } from "node:child_process";
 import type { Task } from "../db/model";
 
+export type EvidenceOptions = {
+  isolation?: "worktree" | "none";
+};
+
 export type TaskEvidence = {
   taskID: string;
   status: string;
+  inPlace: boolean;
   mergedAt: string | null;
   integrationCommit: string | null;
   /** True when integrationCommit is reachable from the main checkout HEAD. */
@@ -32,15 +37,20 @@ export function isAncestor(mainDirectory: string, commit: string, ref = "HEAD"):
   return result.status === 0;
 }
 
-export function taskEvidence(mainDirectory: string, task: Task): TaskEvidence {
+export function taskEvidence(
+  mainDirectory: string,
+  task: Task,
+  options: EvidenceOptions = {},
+): TaskEvidence {
+  const inPlace = options.isolation === "none";
   const problems: string[] = [];
   let ancestorOfMain = false;
 
-  if (task.status === "integrated" && !task.mergedAt) {
+  if (!inPlace && task.status === "integrated" && !task.mergedAt) {
     problems.push(`task ${task.id} is integrated but has no integration commit (not merged)`);
   }
 
-  if (task.integrationCommit) {
+  if (!inPlace && task.integrationCommit) {
     ancestorOfMain = isAncestor(mainDirectory, task.integrationCommit);
     if (!ancestorOfMain) {
       problems.push(
@@ -52,6 +62,7 @@ export function taskEvidence(mainDirectory: string, task: Task): TaskEvidence {
   return {
     taskID: task.id,
     status: task.status,
+    inPlace,
     mergedAt: task.mergedAt,
     integrationCommit: task.integrationCommit,
     ancestorOfMain,
@@ -63,8 +74,12 @@ export function taskEvidence(mainDirectory: string, task: Task): TaskEvidence {
   };
 }
 
-export function missionEvidence(mainDirectory: string, tasks: Task[]) {
-  const tasksEvidence = tasks.map((task) => taskEvidence(mainDirectory, task));
+export function missionEvidence(
+  mainDirectory: string,
+  tasks: Task[],
+  options: EvidenceOptions = {},
+) {
+  const tasksEvidence = tasks.map((task) => taskEvidence(mainDirectory, task, options));
   const problems = tasksEvidence.flatMap((evidence) => evidence.problems);
   return {
     ok: problems.length === 0,

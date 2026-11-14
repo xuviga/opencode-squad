@@ -1,7 +1,9 @@
 import type { Plugin } from "@opencode/plugin";
 import { Skill } from "@opencode/schema/skill";
+import { join } from "node:path";
 import { resolveCapabilities } from "../capabilities";
 import type { SquadStore } from "../db/store";
+import { captureSnapshot } from "../runtime/snapshot";
 import { fail, ok } from "./result";
 
 type AssignInput = {
@@ -116,6 +118,22 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
 
           const assigned = store.assignTask(args.mission_id, args.task_id, args.staff_id, brief);
 
+          // In-place missions have no git diff: capture the folder before the
+          // worker starts so the reviewer can compare it with the result.
+          let snapshotDirectory: string | undefined;
+          const mission = store.requireMission(args.mission_id);
+          if (mission.isolation === "none") {
+            snapshotDirectory = join(
+              ctx.location.directory,
+              ".squad",
+              "snapshots",
+              args.mission_id,
+              args.task_id,
+            );
+            captureSnapshot(ctx.location.directory, snapshotDirectory);
+            store.setTaskSnapshot(args.mission_id, args.task_id, snapshotDirectory);
+          }
+
           const skillAttachments = capabilityResolution.resolved
             .filter((item) => item.kind === "skill" && item.available)
             .map((item) => ({ id: Skill.ID.make(item.id) }));
@@ -141,6 +159,7 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             assigned_status: assigned.status,
             capabilities: capabilityResolution.resolved,
             capability_warnings: capabilityResolution.warnings,
+            ...(snapshotDirectory ? { snapshot_directory: snapshotDirectory } : {}),
           });
         } catch (error) {
           return fail(error);

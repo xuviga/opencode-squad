@@ -122,8 +122,7 @@ export class TaskRepository {
     return this.requireTask(missionID, taskID);
   }
 
-  saveRawReport(missionID: string, taskID: string, rawReport: string): Task {
-    const timestamp = now();
+  saveRawReport(missionID: string, taskID: string, rawReport: string): Task {    const timestamp = now();
     this.db
       .query(
         `UPDATE tasks SET raw_report = ?, status = 'submitted', report_captured_at = ?, updated_at = ?
@@ -137,8 +136,20 @@ export class TaskRepository {
     return this.requireTask(missionID, taskID);
   }
 
-  completeTask(missionID: string, taskID: string, report: unknown): Task {
+  /** Records the filesystem baseline used for in-place (no-git) reviews. */
+  setTaskSnapshot(missionID: string, taskID: string, directory: string): Task {
     const timestamp = now();
+    this.db
+      .query(
+        `UPDATE tasks SET snapshot_directory = ?, updated_at = ?
+         WHERE mission_id = ? AND id = ?`,
+      )
+      .run(directory, timestamp, missionID, taskID);
+    this.store.addEvent(missionID, taskID, "snapshot.captured", { directory });
+    return this.requireTask(missionID, taskID);
+  }
+
+  completeTask(missionID: string, taskID: string, report: unknown): Task {    const timestamp = now();
     this.db
       .query(
         `UPDATE tasks SET status = 'submitted', report_json = ?, updated_at = ?
@@ -245,8 +256,25 @@ export class TaskRepository {
     return this.requireTask(missionID, taskID);
   }
 
-  markMerged(missionID: string, taskID: string, commit: string, sourceCommit?: string): Task {
+  /** In-place isolation: the work already lives in the project directory. */
+  markMergedInPlace(missionID: string, taskID: string): Task {
     const task = this.requireTask(missionID, taskID);
+    if (task.status !== "integrated") {
+      throw new Error(`cannot merge task in status ${task.status}`);
+    }
+    if (task.mergedAt) return task;
+    const timestamp = now();
+    this.db
+      .query(
+        `UPDATE tasks SET merged_at = ?, integration_commit = NULL, updated_at = ?
+         WHERE mission_id = ? AND id = ?`,
+      )
+      .run(timestamp, timestamp, missionID, taskID);
+    this.store.addEvent(missionID, taskID, "integration.in_place", {});
+    return this.requireTask(missionID, taskID);
+  }
+
+  markMerged(missionID: string, taskID: string, commit: string, sourceCommit?: string): Task {    const task = this.requireTask(missionID, taskID);
     if (task.status !== "integrated") {
       throw new Error(`cannot merge task in status ${task.status}`);
     }

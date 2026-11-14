@@ -68,6 +68,66 @@ describe("mission janitor state", () => {
 });
 
 describe("worktree bookkeeping", () => {
+  test("missions default to worktree isolation", () => {
+    expect(store.createMission("default", "").isolation).toBe("worktree");
+  });
+
+  test("in-place mission persists isolation and merges without a commit", () => {
+    const mission = store.createMission("in place", "", "none");
+    expect(store.requireMission(mission.id).isolation).toBe("none");
+
+    store.submitPlan(mission.id, {
+      goal: "g",
+      tasks: [
+        {
+          id: "t1",
+          title: "one",
+          class: "code",
+          role: "implementer",
+          grade: "G1",
+          acceptance: ["ok"],
+        },
+      ],
+    });
+    store.approvePlan(mission.id);
+    const staff = store.hireStaff({
+      persona: "implementer",
+      grade: "G1",
+      agent: "build",
+      provider: "deepseek",
+      model: "deepseek-flash",
+      variant: "low",
+      sessionID: "ses_test",
+    });
+    store.assignTask(mission.id, "t1", staff.id, { goal: "g" });
+    store.saveRawReport(mission.id, "t1", "{}");
+    store.assignReview(mission.id, "t1", staff.id, "ses_reviewer");
+    store.saveVerdict(mission.id, "t1", { verdict: "pass" });
+
+    const merged = store.markMergedInPlace(mission.id, "t1");
+    expect(merged.status).toBe("integrated");
+    expect(merged.mergedAt).not.toBeNull();
+    expect(merged.integrationCommit).toBeNull();
+  });
+
+  test("setTaskSnapshot records the baseline directory", () => {
+    const mission = store.createMission("snapshot", "");
+    store.submitPlan(mission.id, {
+      goal: "g",
+      tasks: [
+        {
+          id: "t1",
+          title: "one",
+          class: "code",
+          role: "implementer",
+          grade: "G1",
+          acceptance: ["ok"],
+        },
+      ],
+    });
+    const task = store.setTaskSnapshot(mission.id, "t1", "C:/tmp/snapshot");
+    expect(task.snapshotDirectory).toBe("C:/tmp/snapshot");
+  });
   test("clearWorktree forgets a removed directory", () => {
     const staff = store.hireStaff({
       persona: "implementer",

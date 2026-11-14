@@ -46,8 +46,13 @@ async function runTaskAudit(
   }
 
   // Deterministic gate: an "integrated" task whose commit never reached main is
-  // a false pass, regardless of what any model says.
-  const evidence = taskEvidence(ctx.location.directory, task);
+  // a false pass, regardless of what any model says. In-place missions have no
+  // commit by design, so the gate only checks worktree missions.
+  const mission = store.requireMission(missionID);
+  const checks = requiredChecks(task.class, { isolation: mission.isolation });
+  const evidence = taskEvidence(ctx.location.directory, task, {
+    isolation: mission.isolation,
+  });
   if (evidence.problems.length > 0) {
     const findings = evidence.problems.map((claim, index) => ({
       id: `E${index + 1}`,
@@ -112,7 +117,12 @@ async function runTaskAudit(
           `This task went through ${evidence.reviewRound} review rounds with only ${evidence.attempts} rework attempts. Check that the reviewed report is current and not a stale capture.`,
         ]
       : []),
-    `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
+    `This task is class "${task.class}". Required checks for a pass: ${checks.join(", ")}.`,
+    ...(mission.isolation === "none"
+      ? [
+          "This mission runs in-place: there is no git commit. The diff is a filesystem snapshot comparison; judge it as the change set.",
+        ]
+      : []),
     "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
     "External assets means remote URLs, @font-face rules, <image>, data: URIs or embedded binaries; font-family names for locally installed fonts are allowed.",
     ...(images.length > 0
@@ -129,7 +139,7 @@ async function runTaskAudit(
       : []),
     "Return ONLY one JSON object, without markdown fences, matching this schema:",
     JSON.stringify(VERDICT_SCHEMA, null, 2),
-    `Rules: a pass must have checked containing ${requiredChecks(task.class).join(", ")}; a fail needs at least one finding with concrete evidence.`,
+    `Rules: a pass must have checked containing ${checks.join(", ")}; a fail needs at least one finding with concrete evidence.`,
     "Task Brief:",
     JSON.stringify(task.brief ?? {}, null, 2),
     "Worker Report:",
@@ -169,7 +179,9 @@ async function runTaskAudit(
 
   const messages = await ctx.session.context({ sessionID: reviewer.sessionID });
   const rawVerdict = extractLastAssistantText(messages);
-  const verdict = parseVerdictText(rawVerdict, task.class);
+  const verdict = parseVerdictText(rawVerdict, task.class, {
+    isolation: mission.isolation,
+  });
   const audit = store.recordAudit({
     missionID,
     taskID,
@@ -205,7 +217,9 @@ async function runProcessAudit(
 ) {
   const mission = store.requireMission(missionID);
   const tasks = store.listTasks(missionID);
-  const processChecks = missionEvidence(ctx.location.directory, tasks);
+  const processChecks = missionEvidence(ctx.location.directory, tasks, {
+    isolation: mission.isolation,
+  });
   const payload = {
     mission,
     plan: store.getPlan(missionID),
@@ -233,6 +247,10 @@ async function runProcessAudit(
     '{"status":"pass | fail","summary":"short verdict","findings":[{"id":"P1","claim":"...","evidence":"...","required_fix":"..."}]}',
     "A fail must contain at least one finding with evidence.",
     "process_checks is computed by git, not by a model. If process_checks.ok is false, status MUST be fail and each entry of process_checks.problems MUST appear as a finding.",
+    `Mission isolation: ${mission.isolation}. In "none" mode there is no git commit and no integration ancestry check; integrated tasks are judged by their reports and filesystem snapshot diffs.`,
+    ...(mission.isolation === "none"
+      ? ["Do not fail a task merely for a missing integration commit in in-place mode."]
+      : []),
     "If a task appears in process_checks.suspiciousReviewRounds, verify from events/disputes whether a dispute or reviewer reset explains the extra rounds; if not, fail.",
     "A second review that ran after the mission was marked done, or an integrated task whose commit is not in main, is a process failure.",
     "Mission report JSON:",

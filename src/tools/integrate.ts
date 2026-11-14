@@ -56,6 +56,12 @@ export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadSto
             }
             const staff = task.staffID ? store.getStaff(task.staffID) : undefined;
             if (!staff?.worktreeDirectory) {
+              const mission = store.requireMission(args.mission_id);
+              if (mission.isolation === "none") {
+                const merged = store.markMergedInPlace(args.mission_id, task.id);
+                results.push({ taskID: task.id, inPlace: true, task: merged });
+                continue;
+              }
               results.push({ taskID: task.id, skipped: true, reason: "no worktree" });
               continue;
             }

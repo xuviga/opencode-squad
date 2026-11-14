@@ -4,7 +4,9 @@ import {
   isTerminalMissionStatus,
   mapMission,
   missionID,
+  normalizeIsolation,
   now,
+  type Isolation,
   type Mission,
   type MissionRow,
 } from "../model";
@@ -16,20 +18,21 @@ export class MissionRepository {
     private readonly store: SquadStore,
   ) {}
 
-  createMission(title: string, goal = ""): Mission {
+  createMission(title: string, goal = "", isolation: Isolation = "worktree"): Mission {
     const cleanTitle = title.trim();
     if (!cleanTitle) throw new Error("mission title must not be empty");
     const id = missionID();
     const timestamp = now();
+    const mode = normalizeIsolation(isolation);
 
     const create = this.db.transaction(() => {
       this.db
         .query(
-          `INSERT INTO missions (id, title, goal, status, created_at, updated_at)
-           VALUES (?, ?, ?, 'draft', ?, ?)`,
+          `INSERT INTO missions (id, title, goal, status, isolation, created_at, updated_at)
+           VALUES (?, ?, ?, 'draft', ?, ?, ?)`,
         )
-        .run(id, cleanTitle, goal.trim(), timestamp, timestamp);
-      this.store.addEvent(id, null, "mission.created", { title: cleanTitle });
+        .run(id, cleanTitle, goal.trim(), mode, timestamp, timestamp);
+      this.store.addEvent(id, null, "mission.created", { title: cleanTitle, isolation: mode });
     });
     create();
 

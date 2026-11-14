@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import { DEFAULT_CONFIG, type Grade } from "../config";
 import type { SquadStore } from "../db/store";
+import { isGitRepository } from "../runtime/git";
 import { VERSION } from "../version";
 
 export type RpcRuntimeState = {
@@ -74,6 +75,11 @@ export async function registerStatusTool(
             workspaceID: ctx.location.workspaceID,
             projectID: ctx.location.project.id,
             canonical: ctx.location.project.canonical,
+          },
+          isolation: {
+            default: "worktree",
+            modes: ["worktree", "none"],
+            worktreeAvailable: isGitRepository(ctx.location.directory),
           },
           counts: {
             models: models.length,

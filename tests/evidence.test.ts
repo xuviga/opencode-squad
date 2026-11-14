@@ -64,6 +64,7 @@ function task(overrides: Partial<Task> = {}): Task {
     verdict: null,
     rawReport: null,
     reportCapturedAt: null,
+    snapshotDirectory: null,
     mergedAt: null,
     integrationCommit: null,
     attempts: 0,

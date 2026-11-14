@@ -117,7 +117,10 @@ export async function registerVerdictTool(ctx: Plugin.Context, store: SquadStore
 
           let verdict: ReturnType<typeof parseVerdictText>;
           try {
-            verdict = parseVerdictText(rawVerdict, task.class);
+            const mission = store.requireMission(args.mission_id);
+            verdict = parseVerdictText(rawVerdict, task.class, {
+              isolation: mission.isolation,
+            });
           } catch (error) {
             store.resetReview(
               args.mission_id,

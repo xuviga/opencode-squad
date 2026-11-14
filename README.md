@@ -2,7 +2,7 @@
 
 Мульти-агентный оркестратор для **OpenCode 2.3.0**: босс планирует миссию, нанимает сотрудников, проводит слепую ревизию, разрешает споры и сливает работу в main через изолированные worktree.
 
-Текущая версия: **0.8.0** · 29 инструментов · 77 тестов.
+Текущая версия: **0.9.0** · 29 инструментов · 86 тестов.
 
 ## Что внутри
 
@@ -18,6 +18,17 @@
 - **Capabilities**: `skill:<id>`, `mcp:<server>`, `tool:<name>`; `squad_capabilities` проверяет доступность, `squad_assign` прикрепляет скиллы и передаёт guidance.
 - **Картинки**: `squad_image` (`engine:"api"` — `experimental.generate.image`; `engine:"vector"` — DeepSeek SVG → PNG через resvg, без image-модели); `squad_preview` рендерит SVG в PNG; `squad_look` отправляет изображение DeepSeek и возвращает визуальный ответ.
 - **Визуальная ревизия**: `squad_review` и `squad_audit` автоматически прикрепляют PNG из отчёта или рендерят preview SVG, чтобы слепой ревизор видел дизайн.
+
+## Режимы изоляции
+
+- **`worktree`** (по умолчанию) — только для git-репозиториев. Писатель работает в отдельном worktree, результат заходит в main через cherry-pick, ревизор видит git-diff. Полные гарантии.
+- **`none`** — для обычных папок без git. Сотрудники работают прямо в каталоге проекта. Перед стартом задачи снимается снапшот текстовых файлов, после — ревизор получает diff по снапшоту (added/modified/deleted). Коммита и cherry-pick нет, параллельные писатели не изолированы, `finalize` не проверяет ancestry. Включается явно:
+
+```text
+squad_mission { action: "create", title: "...", goal: "...", isolation: "none" }
+```
+
+`squad_status` показывает `isolation.worktreeAvailable`, чтобы босс выбрал режим без угадывания.
 
 ## Установка
 
@@ -95,7 +106,7 @@ src/
   tui.tsx           TUI plugin /squad
   db/               SQLite, migrations 001–008, store-facade
   db/repositories/  missions, tasks, staff, ledger, disputes, audits, events
-  runtime/          hire, diff, integrate, evidence, gc, worktree, probe, messages
+  runtime/          hire, diff, integrate, evidence, gc, worktree, snapshot, git, probe, messages
   tools/            29 инструментов
 .opencode/agents/   squad-reviewer, squad-arbiter, squad-auditor (no tools)
 tests/              unit/integration/contract
@@ -127,3 +138,4 @@ bun run vision:probe
 - `.squad/squad.db` хранится в проекте; для нескольких проектов — своя БД на проект.
 - `squad_gc` не запускается сам: janitor вызывается явно (`scan`/`apply`), чтобы не закрыть живую миссию. Порог задаётся `stale_minutes` (по умолчанию 120).
 - После `squad_integrate` worktree удаляется, поэтому поздняя ревизия читает diff из integration-коммита (`source: "integration-commit"`), а не из рабочего каталога.
+- В режиме `isolation:"none"` нет git-коммита и cherry-pick: ревизия опирается на снапшот файлов, а `finalize` не проверяет ancestry. Параллельные писатели в одной папке могут конфликтовать — запускайте их последовательно.

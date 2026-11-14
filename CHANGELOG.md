@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-11-14
+
+- **In-place isolation**: `squad_mission { isolation: "none" }` runs employees directly in the project folder, no git required. Migration 009 adds `missions.isolation` and `tasks.snapshot_directory`.
+- **Snapshot review**: before a task starts, `squad_assign` captures a text-file snapshot (sha256 manifest + copies, skips `node_modules/.git/dist/...`); `taskDiff` returns a per-file added/modified/deleted diff with line patches. Binary and large files are flagged, not inlined.
+- **Class-aware checks**: in-place code tasks pass with `diff + acceptance` instead of `diff + tests`; worktree missions unchanged.
+- **Integration/finalize/audit**: `squad_integrate` marks tasks merged in place; `squad_finalize` and `squad_audit` skip commit-ancestry checks for in-place missions and keep them for worktree missions.
+- **Preflight**: `squad_mission create` with `worktree` in a non-git folder fails with an actionable message; `squad_status` exposes `isolation.worktreeAvailable`.
+- 29 tools, 86 tests.
+
 ## 0.8.0 — 2026-11-14
 
 - **P1 worktree lifecycle**: `squad_integrate` removes the worktree after a successful cherry-pick and clears `staff.worktree_directory`; `squad_cancel` force-removes aborted worktrees; `squad_finalize` sweeps the mission worktrees. Diffs for post-integration review are reconstructed from the integration commit.

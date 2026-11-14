@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import { execFileSync } from "node:child_process";
 import type { SquadStore, Task } from "../db/store";
+import { snapshotDiff } from "./snapshot";
 
 type DiffFile = { file: string; patch: string; status: string; [key: string]: unknown };
 
@@ -135,7 +136,14 @@ export async function taskDiff(
       },
       data,
     };
-  } else if (task.integrationCommit) {
+  }
+
+  const mission = store.requireMission(task.missionID);
+  if (mission.isolation === "none" && task.snapshotDirectory) {
+    return snapshotDiff(task.snapshotDirectory, ctx.location.directory);
+  }
+
+  if (task.integrationCommit) {
     return integrationDiff(
       ctx.location.directory,
       task.integrationCommit,

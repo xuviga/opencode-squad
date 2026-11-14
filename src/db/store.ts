@@ -1,12 +1,15 @@
 import type { Database } from "bun:sqlite";
 import type { MissionPlan } from "../plan";
 import {
+  ISOLATION_MODES,
   MISSION_STATUSES,
+  normalizeIsolation,
   now,
   TERMINAL_MISSION_STATUSES,
   type Audit,
   type Dispute,
   type DisputeMessage,
+  type Isolation,
   type LedgerInput,
   type Lesson,
   type Mission,
@@ -23,11 +26,13 @@ import { StaffRepository } from "./repositories/staff";
 import { TaskRepository } from "./repositories/tasks";
 
 export {
+  ISOLATION_MODES,
   MISSION_STATUSES,
   TERMINAL_MISSION_STATUSES,
   type Audit,
   type Dispute,
   type DisputeMessage,
+  type Isolation,
   type LedgerInput,
   type Lesson,
   type Mission,
@@ -62,8 +67,8 @@ export class SquadStore {
   }
 
   // Missions
-  createMission(title: string, goal = ""): Mission {
-    return this.missions.createMission(title, goal);
+  createMission(title: string, goal = "", isolation: Isolation = "worktree"): Mission {
+    return this.missions.createMission(title, goal, normalizeIsolation(isolation));
   }
 
   listMissions(limit = 20): Mission[] {
@@ -203,6 +208,10 @@ export class SquadStore {
     return this.tasks.saveRawReport(missionID, taskID, rawReport);
   }
 
+  setTaskSnapshot(missionID: string, taskID: string, directory: string): Task {
+    return this.tasks.setTaskSnapshot(missionID, taskID, directory);
+  }
+
   completeTask(missionID: string, taskID: string, report: unknown): Task {
     return this.tasks.completeTask(missionID, taskID, report);
   }
@@ -226,6 +235,10 @@ export class SquadStore {
 
   markMerged(missionID: string, taskID: string, commit: string, sourceCommit?: string): Task {
     return this.tasks.markMerged(missionID, taskID, commit, sourceCommit);
+  }
+
+  markMergedInPlace(missionID: string, taskID: string): Task {
+    return this.tasks.markMergedInPlace(missionID, taskID);
   }
 
   failTask(missionID: string, taskID: string, reason: string): Task {

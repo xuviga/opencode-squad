@@ -15,6 +15,13 @@ export const MISSION_STATUSES = [
 
 export type MissionStatus = (typeof MISSION_STATUSES)[number];
 
+export const ISOLATION_MODES = ["worktree", "none"] as const;
+export type Isolation = (typeof ISOLATION_MODES)[number];
+
+export function normalizeIsolation(value: unknown): Isolation {
+  return value === "none" ? "none" : "worktree";
+}
+
 export const TERMINAL_MISSION_STATUSES: readonly MissionStatus[] = ["done", "failed", "aborted"];
 
 export function isTerminalMissionStatus(status: string): boolean {
@@ -26,6 +33,7 @@ export type Mission = {
   title: string;
   goal: string;
   status: MissionStatus;
+  isolation: Isolation;
   planVersion: number;
   expectedCostUsd: number | null;
   actualCostUsd: number;
@@ -75,6 +83,7 @@ export type Task = {
   verdict: unknown;
   rawReport: string | null;
   reportCapturedAt: string | null;
+  snapshotDirectory: string | null;
   mergedAt: string | null;
   integrationCommit: string | null;
   attempts: number;
@@ -144,6 +153,7 @@ export type MissionRow = {
   title: string;
   goal: string;
   status: MissionStatus;
+  isolation: string | null;
   plan_json: string | null;
   plan_version: number;
   expected_cost_usd: number | null;
@@ -194,6 +204,7 @@ export type TaskRow = {
   verdict_json: string | null;
   raw_report: string | null;
   report_captured_at: string | null;
+  snapshot_directory: string | null;
   merged_at: string | null;
   integration_commit: string | null;
   attempts: number;
@@ -268,6 +279,7 @@ export function mapMission(row: MissionRow): Mission {
     title: row.title,
     goal: row.goal,
     status: row.status,
+    isolation: normalizeIsolation(row.isolation),
     planVersion: row.plan_version,
     expectedCostUsd: row.expected_cost_usd,
     actualCostUsd: row.actual_cost_usd,
@@ -321,6 +333,7 @@ export function mapTask(row: TaskRow): Task {
     verdict: parseJSON<unknown>(row.verdict_json),
     rawReport: row.raw_report,
     reportCapturedAt: row.report_captured_at,
+    snapshotDirectory: row.snapshot_directory,
     mergedAt: row.merged_at,
     integrationCommit: row.integration_commit,
     attempts: row.attempts,

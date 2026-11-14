@@ -57,6 +57,8 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
           });
 
           const task = store.requireTask(args.mission_id, args.task_id);
+          const mission = store.requireMission(args.mission_id);
+          const checks = requiredChecks(task.class, { isolation: mission.isolation });
           if (task.status === "in_review" && task.reviewerSessionID) {
             return ok({
               task,
@@ -107,7 +109,12 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             "You see only the Task Brief, the Worker Report, and the diff. You do not see the worker's reasoning.",
             "You have no tools: do not read files, search, or run commands. Judge only the provided material.",
             "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
-            `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
+            `This task is class "${task.class}". Required checks for a pass: ${checks.join(", ")}.`,
+            ...(mission.isolation === "none"
+              ? [
+                  "This mission runs in-place (no git worktree and no commit). The diff below is a filesystem snapshot comparison captured before the worker started; judge it as the change set.",
+                ]
+              : []),
             "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
             "External assets means remote URLs, @font-face rules, <image>, data: URIs or embedded binaries; font-family names for locally installed fonts are allowed.",
             ...(images.length > 0
@@ -122,7 +129,7 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
               : []),
             "Return ONLY one JSON object, without markdown fences, matching this schema:",
             JSON.stringify(VERDICT_SCHEMA, null, 2),
-            `Rules: a pass must have checked containing ${requiredChecks(task.class).join(", ")}; a fail must have at least one finding with concrete evidence.`,
+            `Rules: a pass must have checked containing ${checks.join(", ")}; a fail must have at least one finding with concrete evidence.`,
             "Task Brief:",
             JSON.stringify(task.brief ?? {}, null, 2),
             "Worker Report:",

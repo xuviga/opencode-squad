@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseVerdictText, validateVerdict } from "../src/verdict";
+import { parseVerdictText, requiredChecks, validateVerdict } from "../src/verdict";
 
 const pass = {
   verdict: "pass",
@@ -25,6 +25,28 @@ const fail = {
 describe("validateVerdict", () => {
   test("accepts a pass with diff and tests", () => {
     expect(validateVerdict(pass).verdict).toBe("pass");
+  });
+
+  test("in-place code tasks require diff and acceptance, not tests", () => {
+    expect(requiredChecks("code", { isolation: "none" })).toEqual(["diff", "acceptance"]);
+    const inPlacePass = {
+      ...pass,
+      checked: ["diff", "acceptance"],
+    };
+    expect(
+      validateVerdict(inPlacePass, "code", { isolation: "none" }).verdict,
+    ).toBe("pass");
+    expect(() => validateVerdict(inPlacePass, "code")).toThrow(
+      "pass verdict requires checked: tests",
+    );
+  });
+
+  test("worktree research tasks still use acceptance and evidence", () => {
+    expect(requiredChecks("research")).toEqual(["acceptance", "evidence"]);
+    expect(requiredChecks("research", { isolation: "none" })).toEqual([
+      "acceptance",
+      "evidence",
+    ]);
   });
 
   test("accepts a fail with an evidenced finding", () => {

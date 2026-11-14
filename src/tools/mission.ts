@@ -1,5 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
+import type { Isolation } from "../db/model";
 import type { SquadStore } from "../db/store";
+import { isGitRepository } from "../runtime/git";
 import { fail, ok } from "./result";
 
 type MissionInput = {
@@ -7,6 +9,7 @@ type MissionInput = {
   mission_id?: string;
   title?: string;
   goal?: string;
+  isolation?: Isolation;
 };
 
 export async function registerMissionTool(ctx: Plugin.Context, store: SquadStore) {
@@ -14,7 +17,7 @@ export async function registerMissionTool(ctx: Plugin.Context, store: SquadStore
     editor.add({
       name: "mission",
       description:
-        "Create, list, or inspect SQUAD missions. A new mission starts in status draft; a submitted plan moves it to plan_gate.",
+        "Create, list, or inspect SQUAD missions. A new mission starts in status draft; a submitted plan moves it to plan_gate. isolation=worktree (default) requires a git repository; isolation=none runs employees directly in the project directory and reviews filesystem snapshots instead of git diffs.",
       input: {
         type: "object",
         properties: {
@@ -22,6 +25,7 @@ export async function registerMissionTool(ctx: Plugin.Context, store: SquadStore
           mission_id: { type: "string" },
           title: { type: "string" },
           goal: { type: "string" },
+          isolation: { type: "string", enum: ["worktree", "none"] },
         },
         required: ["action"],
         additionalProperties: false,
@@ -33,8 +37,17 @@ export async function registerMissionTool(ctx: Plugin.Context, store: SquadStore
           switch (args.action) {
             case "create": {
               if (!args.title) throw new Error("title is required for create");
-              const mission = store.createMission(args.title, args.goal ?? "");
-              return ok({ mission, mission_id: mission.id });
+              const isolation: Isolation = args.isolation === "none" ? "none" : "worktree";
+              if (isolation === "worktree" && !isGitRepository(ctx.location.directory)) {
+                throw new Error(
+                  `Worktree isolation needs a git repository, but ${ctx.location.directory} is not one. ` +
+                    `Either create the repository before opening OpenCode (git init && git add -A && git commit -m baseline), ` +
+                    `or create this mission with isolation:"none" to run employees directly in the folder ` +
+                    `(weaker isolation: no worktrees, reviews use filesystem snapshots).`,
+                );
+              }
+              const mission = store.createMission(args.title, args.goal ?? "", isolation);
+              return ok({ mission, mission_id: mission.id, isolation: mission.isolation });
             }
             case "list":
               return ok({ missions: store.listMissions() });

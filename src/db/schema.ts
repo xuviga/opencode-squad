@@ -218,4 +218,12 @@ ALTER TABLE tasks ADD COLUMN capabilities_json TEXT;
 UPDATE tasks SET capabilities_json = '[]' WHERE capabilities_json IS NULL;
 `,
   },
+  {
+    version: 9,
+    name: "isolation_and_snapshots",
+    sql: `
+ALTER TABLE missions ADD COLUMN isolation TEXT NOT NULL DEFAULT 'worktree';
+ALTER TABLE tasks ADD COLUMN snapshot_directory TEXT;
+`,
+  },
 ];
