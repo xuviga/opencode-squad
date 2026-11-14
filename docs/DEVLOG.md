@@ -196,14 +196,15 @@
 
 - `squad_status` в standalone: `rpc.registered = true`.
 - RPC `state` в shared service: `RPC is unavailable: squad`, пока plugin location не прогрет; TUI подключается к тому же серверу, где plugin загружен.
+- `opencode --standalone` TUI-процесс запущен; `squad.tui` не дал ошибок загрузки; панель визуально не открывалась.
 - Живой визуальный TUI-прогон (`/squad` → panel → approve) ещё не выполнен.
 
 **Структура**
 
 ```text
 src/
-  index.ts              Plugin.define + 16 tools
-  version.ts            0.2.0
+  index.ts              Plugin.define + 22 tools + RPC
+  version.ts            0.3.0
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
   report.ts             TaskReport + парсер
@@ -298,6 +299,7 @@ tests/
 | M5 process audit live | ❌ fail с 3 findings: audit after done, no merge event, one report capture across 3 rounds; cost `$0.0042789` |
 | M6 integration smoke | ✅ worker `40d5f8f` → main `77847d3`, audit pass, mission `done`, budget `$0.00628` |
 | RPC registration | ✅ `squad_status.rpc.registered = true` в standalone |
+| TUI process start | ✅ `opencode --standalone` без ошибок `squad.tui` |
 | TUI live panel | ⚪ не проведён: `/squad`, approve/reject, visual |
 
 **Найдено и исправлено**
