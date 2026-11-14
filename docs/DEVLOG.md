@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ · integration gate ✅ · M7 hardening 🟡**; TUI live check и release впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ (research + design live) · integration gate ✅ · M7 hardening 🟡**; TUI live check и release впереди
 
 ## Как ведётся журнал
 
@@ -23,7 +23,7 @@
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
 | M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge; 3 параллельных задачи live `m_a5669cde`; conflict strategy `abort/theirs` |
 | M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
-| M6 Универсальные классы | ✅ | 10 шаблонов планов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research mission `m_e6049e51` |
+| M6 Универсальные классы | ✅ | 10 шаблонов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research `m_e6049e51` и design `m_2e72a622` |
 | M7 Закалка | 🟡 начат | cancel, API drift test, README, chaos/contracts; release впереди |
 
 ## Журнал
@@ -204,7 +204,7 @@
 ```text
 src/
   index.ts              Plugin.define + 26 tools + RPC
-  version.ts            0.5.0
+  version.ts            0.5.1
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
   classes.ts            шаблоны классов + buildPlanTemplate
@@ -222,6 +222,7 @@ src/
   runtime/messages.ts   assistant text + last assistant
   runtime/diff.ts       per-task diff: git-worktree / vcs
   runtime/integrate.ts  cherry-pick worktree → main
+  runtime/commit.ts     авто-коммит worktree после wait
   db/schema.ts          migrations 001–008
   db/index.ts           openSquadDb + WAL + миграции
   db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist/disputes/audits/lessons
@@ -275,6 +276,8 @@ dev/
   m6-review-synth-prompt.md M6 synth review
   m6-finalize-prompt.md M6 audit + finalize
   m6-image-prompt.md    M6 image smoke
+  design/concept.md     design live: concept
+  design/squad-poster.svg design live: editable poster
   one-line-proof.txt    artifact M2
   m6-proof.txt          artifact M6 (merged to main)
 scripts/
@@ -293,6 +296,8 @@ tests/
   wait.test.ts
   tui.test.ts
   api-drift.test.ts
+  commit.test.ts
+  diff.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -349,7 +354,7 @@ tests/
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
 - [x] `squad_integrate` strategy: `abort` (по умолчанию) и `theirs` (авто-разрешение конфликта в пользу воркера), результат пишет strategy.
 - [x] `squad_cancel`: аварийное завершение миссии с причиной; non-integrated задачи → `cancelled`, merged работа сохраняется.
-- [x] Версия `0.5.0`, 26 инструментов, 54 теста.
+- [x] Версия `0.5.1`, 26 инструментов, 57 тестов.
 
 **Проверки**
 
@@ -392,19 +397,46 @@ tests/
 9. Ревизор обоснованно зафейлил c2 из-за BOM: в рабочем файле был `EF BB BF 43 32`, хотя blob в HEAD — чистый `43 32`; `git status` при этом чистый, потому что Git normalizes BOM на hash-object. Rework с явным UTF8 без BOM прошёл.
 10. `session.wait` ждёт model work, но не `session.shell`; удержать сессию 600-секундным shell для live timeout не удалось. Timeout-ветка покрыта `tests/wait.test.ts` с fake session.
 
+### 2026-11-14 · Сессия 10 — Design class live на DeepSeek + auto-commit
+
+**Сделано**
+
+- [x] Проверка реестра: у official DeepSeek **0 image-моделей** (только `deepseek-flash` и `deepseek-v4-pro`, text). Design live сделан как text→SVG, без image API.
+- [x] `src/runtime/commit.ts`: `squad_wait` авто-коммитит грязный worktree после отчёта воркера; событие `worktree.committed`; при ошибке task → `failed` (fail-closed).
+- [x] `taskDiff` отдаёт `worktree.head/subject/dirty`; review и audit видят коммит и не верят устаревшему report.
+- [x] Уточнение external assets: локальные `font-family` — не external; external = remote URL, `@font-face`, `<image>`, `data:` URI, embedded binaries.
+- [x] `tests/commit.test.ts`, `tests/diff.test.ts`; 57 тестов.
+
+**Проверки**
+
+| Сценарий | Результат |
+|---|---|
+| Design live `m_2e72a622` | ✅ `concept.md` + `squad-poster.svg`, 1200×1600, 42 `<text>`, 0 `<image>`, 0 `<path>`; review pass, audit pass, mission `done`, $0.103542 |
+| Dispute `d_c9b37768` | ✅ arbiter `worker`: F1/F2 rescinded, ruling cost $0.007115 |
+| Reviewer commit metadata | ✅ arbiter цитирует `ff3e6f4`, `dirty:false` и отменяет ложный F1 |
+| Auto-commit designer | ✅ designer без shell → `ff3e6f4`; produce integrated `b060bd5` |
+| SVG structure | ✅ viewBox `0 0 1200 1600`, 42 text, 0 image, 0 path, нет remote/@font-face/data: |
+
+**Найдено**
+
+1. Official DeepSeek не предоставляет image-модель; для design-класса правильный путь — editable SVG (vector), а не raster image API.
+2. Writer/designer с `access=write` не имеет shell/git: без авто-коммита работа остаётся в worktree и не интегрируется. Исправлено.
+3. Ревизор видел устаревший worker report («uncommitted») и фейлил, хотя worktree уже был закоммичен. Исправлено метаданными коммита + явным правилом.
+4. Ревизор трактовал имена локальных шрифтов как external assets. Исправлено правилом; arbiter подтвердил.
+5. Dispute сработал как задумано: ложный fail отменён, task вернулся в `submitted`, повторная ревизия — `pass`.
+
 **Открытые вопросы**
 
-- TUI wiring покрыт unit-тестом (`/squad`, slot, panel.open), но живой визуальный прогон под TTY всё ещё не выполнен.
-- RPC `state` в shared service был недоступен, пока plugin location не прогрет; TUI использует тот же сервер, где plugin загружен.
-- `squad_image` заблокирован просроченным OpenCode API key; нужен валидный ключ для реальной генерации.
-- Live timeout через `session.shell` невозможен: `session.wait` не ждёт shell; ветка покрыта unit-тестом.
+- Raster/PNG preview для design не сгенерирован: DeepSeek не умеет image, а OpenCode image-key просрочен. SVG — финальный векторный артефакт.
+- TUI wiring покрыт unit-тестом, но живой визуальный прогон под TTY всё ещё не выполнен.
+- `session.wait` не ждёт `session.shell`; timeout-ветка покрыта fake-session тестом.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.
 - `.squad/squad.db` project-local.
-- Тестовые миссии закрыты через `squad_cancel`: `m_680e636a`, `m_5e2b1f16`, `m_244bbc9f` → `aborted`.
 
 **Дальше**
 
-1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-2. **Design class live** — после замены API key: `squad_image` + design template + review.
-3. M7: chaos-тесты, release, README.
+1. M7: оставшиеся chaos-сценарии и release.
+2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
+3. Raster preview дизайна — при валидном image-key или через CorelDRAW/poster-compiler.
+4. Тег `v0.5.1` и финальный отчёт.
