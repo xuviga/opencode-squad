@@ -1,7 +1,6 @@
 import type { Plugin } from "@opencode/plugin";
-import { DEFAULT_CONFIG } from "../config";
 import type { SquadStore } from "../db/store";
-import { gradeOrDefault, personaPermissions, resolvePersona } from "../personas";
+import { hireEmployee } from "../runtime/hire";
 import { fail, ok } from "./result";
 
 type HireInput = {
@@ -44,51 +43,27 @@ export async function registerHireTool(ctx: Plugin.Context, store: SquadStore) {
           });
 
           const mission = store.requireMission(args.mission_id);
-          if (!["staffing", "executing"].includes(mission.status)) {
+          if (!["staffing", "executing", "reviewing"].includes(mission.status)) {
             throw new Error(`cannot hire in mission status ${mission.status}`);
           }
 
-          const spec = resolvePersona(args.persona);
-          const grade = gradeOrDefault(args.persona, args.grade);
-          const model = DEFAULT_CONFIG.grades[grade];
-          const agent = args.agent?.trim() || spec.agent;
-
-          const session = await ctx.session.create({
-            parentID: context.sessionID,
-            title: `SQUAD ${args.persona} (${grade})`,
-            agent,
-            model: {
-              id: model.modelID,
-              providerID: model.providerID,
-              variant: model.variant,
-            },
-            location: { directory: ctx.location.directory },
-            permissions: personaPermissions(spec.access),
+          const result = await hireEmployee(ctx, store, {
+            missionID: args.mission_id,
+            persona: args.persona,
+            grade: args.grade,
+            agent: args.agent,
+            parentSessionID: context.sessionID,
           });
 
-          try {
-            const staff = store.hireStaff({
-              persona: args.persona,
-              grade,
-              agent,
-              provider: model.providerID,
-              model: model.modelID,
-              variant: model.variant,
-              sessionID: session.id,
-            });
-            return ok({
-              staff,
-              staff_id: staff.id,
-              session_id: session.id,
-              agent,
-              grade,
-              model,
-              access: spec.access,
-            });
-          } catch (error) {
-            await ctx.session.remove({ sessionID: session.id }).catch(() => undefined);
-            throw error;
-          }
+          return ok({
+            staff: result.staff,
+            staff_id: result.staff.id,
+            session_id: result.sessionID,
+            agent: result.agent,
+            grade: result.grade,
+            model: result.model,
+            access: result.access,
+          });
         } catch (error) {
           return fail(error);
         }

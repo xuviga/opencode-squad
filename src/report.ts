@@ -1,3 +1,5 @@
+import { parseLastJsonObject } from "./json";
+
 export const REPORT_STATUSES = ["done", "blocked", "failed"] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
@@ -86,18 +88,6 @@ export function validateReport(value: unknown): TaskReport {
 }
 
 export function parseReportText(text: string): TaskReport {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) {
-    throw new Error("no JSON object found in the worker report");
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch (error) {
-    throw new Error(
-      `worker report is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
+  const parsed = parseLastJsonObject(text, "worker report");
   return validateReport(parsed);
 }

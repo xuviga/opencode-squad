@@ -34,6 +34,14 @@ describe("validateReport", () => {
     expect(report.summary).toBe("Fixed pagination");
   });
 
+  test("parses concatenated JSON and takes the last report", () => {
+    const text =
+      JSON.stringify({ ...validReport, summary: "first" }) +
+      "\n" +
+      JSON.stringify({ ...validReport, summary: "second" });
+    expect(parseReportText(text).summary).toBe("second");
+  });
+
   test("rejects text without JSON", () => {
     expect(() => parseReportText("no json here")).toThrow("no JSON object");
   });

@@ -42,6 +42,8 @@ export type Staff = {
   score: number;
   status: string;
   reason: string | null;
+  firedAt: string | null;
+  evidenceRef: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -59,8 +61,12 @@ export type Task = {
   staffID: string | null;
   sessionID: string | null;
   assignedAt: string | null;
+  reviewerStaffID: string | null;
+  reviewerSessionID: string | null;
+  reviewRound: number;
   brief: unknown;
   report: unknown;
+  verdict: unknown;
   rawReport: string | null;
   attempts: number;
   createdAt: string;
@@ -106,6 +112,8 @@ type StaffRow = {
   score: number;
   status: string;
   reason: string | null;
+  fired_at: string | null;
+  evidence_ref: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -123,8 +131,12 @@ type TaskRow = {
   staff_id: string | null;
   session_id: string | null;
   assigned_at: string | null;
+  reviewer_staff_id: string | null;
+  reviewer_session_id: string | null;
+  review_round: number;
   brief_json: string | null;
   report_json: string | null;
+  verdict_json: string | null;
   raw_report: string | null;
   attempts: number;
   created_at: string;
@@ -176,6 +188,8 @@ function mapStaff(row: StaffRow): Staff {
     score: row.score,
     status: row.status,
     reason: row.reason,
+    firedAt: row.fired_at,
+    evidenceRef: row.evidence_ref,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -195,8 +209,12 @@ function mapTask(row: TaskRow): Task {
     staffID: row.staff_id,
     sessionID: row.session_id,
     assignedAt: row.assigned_at,
+    reviewerStaffID: row.reviewer_staff_id,
+    reviewerSessionID: row.reviewer_session_id,
+    reviewRound: row.review_round,
     brief: parseJSON<unknown>(row.brief_json),
     report: parseJSON<unknown>(row.report_json),
+    verdict: parseJSON<unknown>(row.verdict_json),
     rawReport: row.raw_report,
     attempts: row.attempts,
     createdAt: row.created_at,
@@ -436,12 +454,28 @@ export class SquadStore {
       throw new Error(`cannot assign task in mission status ${mission.status}`);
     }
     const task = this.requireTask(missionID, taskID);
-    if (!["pending", "ready", "failed"].includes(task.status)) {
+    if (!["pending", "ready", "failed", "returned"].includes(task.status)) {
       throw new Error(`cannot assign task in status ${task.status}`);
     }
     const staff = this.requireStaff(staffID);
     if (staff.status !== "active") throw new Error(`staff is not active: ${staffID}`);
     if (!staff.sessionID) throw new Error(`staff has no session: ${staffID}`);
+
+    const nextAttempts = task.status === "returned" ? task.attempts + 1 : task.attempts;
+    if (nextAttempts > 2) {
+      const timestamp = now();
+      this.db
+        .query(
+          `UPDATE tasks SET status = 'escalated', updated_at = ?
+           WHERE mission_id = ? AND id = ?`,
+        )
+        .run(timestamp, missionID, taskID);
+      this.addEvent(missionID, taskID, "task.escalated", {
+        reason: "rework limit exceeded",
+        attempts: task.attempts,
+      });
+      throw new Error(`rework limit exceeded for task ${taskID}`);
+    }
 
     const timestamp = now();
     const assign = this.db.transaction(() => {
@@ -449,7 +483,7 @@ export class SquadStore {
         .query(
           `UPDATE tasks
            SET status = 'assigned', staff_id = ?, session_id = ?, brief_json = ?,
-               assigned_at = ?, updated_at = ?
+               assigned_at = ?, attempts = ?, updated_at = ?
            WHERE mission_id = ? AND id = ?`,
         )
         .run(
@@ -457,6 +491,7 @@ export class SquadStore {
           staff.sessionID,
           JSON.stringify(brief),
           timestamp,
+          nextAttempts,
           timestamp,
           missionID,
           taskID,
@@ -535,6 +570,135 @@ export class SquadStore {
     return this.requireTask(missionID, taskID);
   }
 
+  assignReview(
+    missionID: string,
+    taskID: string,
+    reviewerStaffID: string,
+    reviewerSessionID: string,
+  ): Task {
+    const task = this.requireTask(missionID, taskID);
+    if (task.status !== "submitted") {
+      throw new Error(`cannot review task in status ${task.status}`);
+    }
+    const timestamp = now();
+    const assign = this.db.transaction(() => {
+      this.db
+        .query(
+          `UPDATE tasks
+           SET status = 'in_review', reviewer_staff_id = ?, reviewer_session_id = ?,
+               review_round = review_round + 1, updated_at = ?
+           WHERE mission_id = ? AND id = ?`,
+        )
+        .run(reviewerStaffID, reviewerSessionID, timestamp, missionID, taskID);
+      this.db
+        .query(
+          `UPDATE missions SET status = 'reviewing', updated_at = ?
+           WHERE id = ? AND status IN ('executing', 'staffing')`,
+        )
+        .run(timestamp, missionID);
+      this.addEvent(missionID, taskID, "review.started", {
+        reviewerStaffID,
+        reviewerSessionID,
+        round: task.reviewRound + 1,
+      });
+    });
+    assign();
+    return this.requireTask(missionID, taskID);
+  }
+
+  resetReview(missionID: string, taskID: string, reason: string): Task {
+    const timestamp = now();
+    this.db
+      .query(
+        `UPDATE tasks
+         SET status = 'submitted', reviewer_staff_id = NULL, reviewer_session_id = NULL,
+             updated_at = ?
+         WHERE mission_id = ? AND id = ? AND status = 'in_review'`,
+      )
+      .run(timestamp, missionID, taskID);
+    this.addEvent(missionID, taskID, "review.reset", { reason });
+    return this.requireTask(missionID, taskID);
+  }
+
+  saveVerdict(missionID: string, taskID: string, verdict: unknown): Task {
+    const task = this.requireTask(missionID, taskID);
+    if (task.status !== "in_review") {
+      throw new Error(`cannot save verdict in task status ${task.status}`);
+    }
+    const outcome = (verdict as { verdict?: string } | null)?.verdict;
+    if (outcome !== "pass" && outcome !== "fail") {
+      throw new Error("verdict.verdict must be pass or fail");
+    }
+    const timestamp = now();
+    const save = this.db.transaction(() => {
+      this.db
+        .query(
+          `UPDATE tasks SET status = ?, verdict_json = ?, updated_at = ?
+           WHERE mission_id = ? AND id = ?`,
+        )
+        .run(outcome === "pass" ? "integrated" : "returned", JSON.stringify(verdict), timestamp, missionID, taskID);
+
+      if (outcome === "fail") {
+        this.db
+          .query(
+            `UPDATE missions SET status = 'executing', updated_at = ?
+             WHERE id = ? AND status = 'reviewing'`,
+          )
+          .run(timestamp, missionID);
+        this.addEvent(missionID, taskID, "review.failed", {
+          round: task.reviewRound,
+        });
+      } else {
+        this.addEvent(missionID, taskID, "review.passed", {
+          round: task.reviewRound,
+        });
+      }
+    });
+    save();
+    this.maybeFinishMission(missionID);
+    return this.requireTask(missionID, taskID);
+  }
+
+  private maybeFinishMission(missionID: string): void {
+    const mission = this.requireMission(missionID);
+    if (mission.status !== "reviewing") return;
+    const tasks = this.listTasks(missionID);
+    if (tasks.length === 0) return;
+    if (!tasks.every((task) => task.status === "integrated")) return;
+    this.db
+      .query(
+        `UPDATE missions SET status = 'done', updated_at = ?
+         WHERE id = ? AND status = 'reviewing'`,
+      )
+      .run(now(), missionID);
+    this.addEvent(missionID, null, "mission.done", {});
+  }
+
+  listEvents(missionID: string, limit = 100) {
+    const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 500));
+    return this.db
+      .query(
+        `SELECT id, mission_id, task_id, type, payload_json, created_at
+         FROM events WHERE mission_id = ?
+         ORDER BY id DESC LIMIT ?`,
+      )
+      .all(missionID, safeLimit) as Array<{
+      id: number;
+      mission_id: string | null;
+      task_id: string | null;
+      type: string;
+      payload_json: string | null;
+      created_at: string;
+    }>;
+  }
+
+  countEvents(missionID: string): number {
+    const row = this.db
+      .query("SELECT COUNT(*) AS count FROM events WHERE mission_id = ?")
+      .get(missionID) as { count: number };
+    return row.count;
+  }
+
   failTask(missionID: string, taskID: string, reason: string): Task {
     const timestamp = now();
     this.db
@@ -555,6 +719,197 @@ export class SquadStore {
       )
       .get(missionID, taskID, sessionID) as { count: number };
     return row.count > 0;
+  }
+
+  appraiseStaff(staffID: string, delta: number, note = ""): Staff {
+    const staff = this.requireStaff(staffID);
+    if (staff.status !== "active") throw new Error(`staff is not active: ${staffID}`);
+    if (!Number.isFinite(delta)) throw new Error("appraisal delta must be a finite number");
+    const nextScore = Math.max(0, Math.min(1, staff.score + delta));
+    const timestamp = now();
+    const appraise = this.db.transaction(() => {
+      this.db
+        .query("UPDATE staff SET score = ?, updated_at = ? WHERE id = ?")
+        .run(nextScore, timestamp, staffID);
+      this.db
+        .query(
+          `INSERT INTO appraisals (staff_id, delta, note, created_at)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .run(staffID, delta, note, timestamp);
+      this.addEvent(null, null, "staff.appraised", { staffID, delta, note });
+    });
+    appraise();
+    return this.requireStaff(staffID);
+  }
+
+  fireStaff(staffID: string, reason: string, evidenceRef: string): Staff {
+    const staff = this.requireStaff(staffID);
+    if (staff.status === "fired") throw new Error(`staff already fired: ${staffID}`);
+    if (!reason.trim()) throw new Error("fire reason is required");
+    if (!evidenceRef.trim()) throw new Error("fire evidence_ref is required");
+    const timestamp = now();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const fire = this.db.transaction(() => {
+      this.db
+        .query(
+          `UPDATE staff
+           SET status = 'fired', reason = ?, evidence_ref = ?, fired_at = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(reason.trim(), evidenceRef.trim(), timestamp, timestamp, staffID);
+      this.db
+        .query(
+          `INSERT INTO blacklist
+           (persona, grade, reason, evidence_ref, created_at, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(staff.persona, staff.grade, reason.trim(), evidenceRef.trim(), timestamp, expiresAt);
+      this.addEvent(null, null, "staff.fired", {
+        staffID,
+        persona: staff.persona,
+        grade: staff.grade,
+        reason: reason.trim(),
+        evidenceRef: evidenceRef.trim(),
+        blacklistedUntil: expiresAt,
+      });
+    });
+    fire();
+    return this.requireStaff(staffID);
+  }
+
+  isBlacklisted(persona: string, grade: string): boolean {
+    const row = this.db
+      .query(
+        `SELECT 1 AS blocked FROM blacklist
+         WHERE persona = ? AND grade = ? AND expires_at > ?
+         LIMIT 1`,
+      )
+      .get(persona, grade, now()) as { blocked?: number } | undefined;
+    return row?.blocked === 1;
+  }
+
+  listAppraisals(staffID: string, limit = 50) {
+    const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 200));
+    return this.db
+      .query(
+        `SELECT id, staff_id, delta, note, created_at
+         FROM appraisals WHERE staff_id = ?
+         ORDER BY id DESC LIMIT ?`,
+      )
+      .all(staffID, safeLimit) as Array<{
+      id: number;
+      staff_id: string;
+      delta: number;
+      note: string | null;
+      created_at: string;
+    }>;
+  }
+
+  scorecard(staffID: string) {
+    const staff = this.requireStaff(staffID);
+    const tasks = this.db
+      .query("SELECT * FROM tasks WHERE staff_id = ?")
+      .all(staffID) as TaskRow[];
+    const total = tasks.length;
+    if (total === 0) {
+      return {
+        staffID,
+        staff: staff.persona,
+        grade: staff.grade,
+        tasks: 0,
+        passAt1: 0,
+        rework: 0,
+        timeout: 0,
+        disputeLoss: 0,
+        costEfficiency: 1,
+        score: 0.5,
+        totalCostUsd: 0,
+        recommendation: "insufficient_data",
+      };
+    }
+
+    const passAt1 =
+      tasks.filter((task) => task.status === "integrated" && task.attempts === 0).length / total;
+    const rework =
+      tasks.filter((task) => task.attempts > 0 || task.status === "returned").length / total;
+    const timeout = tasks.filter((task) => task.status === "failed").length / total;
+    const disputeLoss = 0;
+
+    const costRows = this.db
+      .query(
+        `SELECT staff_id, COALESCE(SUM(cost), 0) AS total
+         FROM ledger WHERE staff_id IS NOT NULL GROUP BY staff_id`,
+      )
+      .all() as Array<{ staff_id: string; total: number }>;
+    const totalCost = costRows.find((row) => row.staff_id === staffID)?.total ?? 0;
+    const costs = costRows
+      .map((row) => row.total)
+      .filter((cost) => cost > 0)
+      .sort((a, b) => a - b);
+    const medianCost = costs.length > 0 ? costs[Math.floor(costs.length / 2)]! : 0;
+    const costEfficiency =
+      totalCost <= 0 || medianCost <= 0 ? 1 : Math.min(1, medianCost / totalCost);
+
+    const score = Math.max(
+      0,
+      Math.min(
+        1,
+        0.4 * passAt1 +
+          0.2 * (1 - rework) +
+          0.15 * (1 - disputeLoss) +
+          0.15 * costEfficiency +
+          0.1 * (1 - timeout),
+      ),
+    );
+
+    const failed = tasks.filter((task) => task.status === "failed").length;
+    const recommendation =
+      failed >= 2 ? "fire" : score >= 0.85 && total >= 5 ? "promote" : score <= 0.4 ? "demote" : "hold";
+
+    return {
+      staffID,
+      staff: staff.persona,
+      grade: staff.grade,
+      tasks: total,
+      passAt1,
+      rework,
+      timeout,
+      disputeLoss,
+      costEfficiency,
+      score,
+      totalCostUsd: totalCost,
+      medianCostUsd: medianCost,
+      recommendation,
+    };
+  }
+
+  changeGrade(staffID: string, direction: "up" | "down"): Staff {
+    const staff = this.requireStaff(staffID);
+    const grades = ["G0", "G1", "G2", "G3", "G4"];
+    const index = grades.indexOf(staff.grade);
+    if (index < 0) throw new Error(`unknown grade: ${staff.grade}`);
+    const nextIndex =
+      direction === "up" ? Math.min(grades.length - 1, index + 1) : Math.max(0, index - 1);
+    if (nextIndex === index) return staff;
+    const timestamp = now();
+    this.db
+      .query("UPDATE staff SET grade = ?, updated_at = ? WHERE id = ?")
+      .run(grades[nextIndex], timestamp, staffID);
+    this.addEvent(null, null, "staff.grade_changed", {
+      staffID,
+      from: staff.grade,
+      to: grades[nextIndex],
+      direction,
+    });
+    return this.requireStaff(staffID);
+  }
+
+  countBlacklist(): number {
+    const row = this.db
+      .query("SELECT COUNT(*) AS count FROM blacklist WHERE expires_at > ?")
+      .get(now()) as { count: number };
+    return row.count;
   }
 
   countStaff(): number {

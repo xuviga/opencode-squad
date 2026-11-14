@@ -2,7 +2,7 @@
 
 > Версия плана: **0.3** · 14.11.2026
 > Платформа: **OpenCode 2.3.0** · `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Статус: M0.0 ✅ · M0 server-side ✅ · M1 happy path ✅; TUI и M2 впереди
+> Статус: M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅; TUI, M4+ впереди
 > Изменения 0.3: §3 — проверенный API 2.3.0 и правила promise/effect; §7 — статусы `blocked/failed/cancelled`; §10 — per-session ledger и формула оценки; §11 — blind-изоляция; §15 — M0.0 probe; §16–18 — security/migration/API drift.
 
 ---
@@ -420,7 +420,7 @@ SQUAD · m_001  ██████░░░░ 62%  $0.08 (est $0.12)
 
 ## 15. План реализации
 
-> Фактический прогресс на 14.11.2026: M0.0 ✅; M0 server-side ✅ (TUI нет); M1 happy path ✅. Детали, команды и результаты — `docs/DEVLOG.md`.
+> Фактический прогресс на 14.11.2026: M0.0 ✅; M0 server-side ✅ (TUI нет); M1 ✅; M2 ✅; M3 ✅. Детали, команды и результаты — `docs/DEVLOG.md`.
 
 ### M0.0. Capability probe (0.5–1 день)
 - [ ] Probe-плагин на живом хосте 2.3.0: `session.create` с `parentID`, `model.variant`, `permissions`; `session.prompt`; `session.wait`; `session.interrupt`; `session.context` / `session.diff`; `worktree.create/remove/refresh`; `experimental.generate.decisions`.

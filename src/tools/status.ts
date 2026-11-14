@@ -77,6 +77,7 @@ export async function registerStatusTool(ctx: Plugin.Context, store: SquadStore)
             missions: store.countMissions(),
             staff: store.countStaff(),
             tasks: store.countTasks(),
+            blacklist: store.countBlacklist(),
           },
           deepseek,
           grades: gradeSnapshot(),

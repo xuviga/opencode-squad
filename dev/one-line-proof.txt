@@ -1,0 +1,1 @@
+Proof that √2 is irrational: if √2 = p/q with integers p, q in lowest terms, then p² = 2q², so p² is even, hence p is even, say p = 2k, whence 2k² = q² and q is even too — contradicting that p/q was in lowest terms, so no such p/q exists and √2 is irrational.

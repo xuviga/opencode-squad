@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
-import { extractAssistantText } from "../runtime/messages";
+import { extractLastAssistantText } from "../runtime/messages";
 import { fail, ok } from "./result";
 
 type WaitInput = {
@@ -109,7 +109,7 @@ export async function registerWaitTool(ctx: Plugin.Context, store: SquadStore) {
           }
 
           const messages = await ctx.session.context({ sessionID });
-          const rawReport = extractAssistantText(messages);
+          const rawReport = extractLastAssistantText(messages);
           const info = await ctx.session.get({ sessionID });
 
           if (!store.hasLedgerEntry(args.mission_id, args.task_id, sessionID)) {

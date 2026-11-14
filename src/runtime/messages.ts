@@ -14,3 +14,16 @@ export function extractAssistantText(messages: readonly unknown[]): string {
   }
   return parts.join("\n").trim();
 }
+
+/**
+ * Returns the text of the last assistant message that has text content.
+ * A rework session contains the previous round's messages; taking only the
+ * last assistant text avoids concatenating two reports into invalid JSON.
+ */
+export function extractLastAssistantText(messages: readonly unknown[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const text = extractAssistantText([messages[index]]);
+    if (text.length > 0) return text;
+  }
+  return "";
+}

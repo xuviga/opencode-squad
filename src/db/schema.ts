@@ -102,4 +102,42 @@ CREATE INDEX IF NOT EXISTS idx_tasks_staff ON tasks(staff_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id);
 `,
   },
+  {
+    version: 3,
+    name: "reviews",
+    sql: `
+ALTER TABLE tasks ADD COLUMN reviewer_staff_id TEXT;
+ALTER TABLE tasks ADD COLUMN reviewer_session_id TEXT;
+ALTER TABLE tasks ADD COLUMN review_round INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_tasks_reviewer ON tasks(reviewer_staff_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_review_session ON tasks(reviewer_session_id);
+`,
+  },
+  {
+    version: 4,
+    name: "hr",
+    sql: `
+ALTER TABLE staff ADD COLUMN fired_at TEXT;
+ALTER TABLE staff ADD COLUMN evidence_ref TEXT;
+CREATE TABLE IF NOT EXISTS appraisals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  staff_id TEXT NOT NULL,
+  delta REAL NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS blacklist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  persona TEXT NOT NULL,
+  grade TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  evidence_ref TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_appraisals_staff ON appraisals(staff_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_blacklist_persona_grade ON blacklist(persona, grade, expires_at);
+`,
+  },
 ];

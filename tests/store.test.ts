@@ -123,4 +123,76 @@ describe("SquadStore", () => {
     store.approvePlan(mission.id);
     expect(() => store.submitPlan(mission.id, plan)).toThrow("cannot submit plan");
   });
+
+  test("review fail returns the task, rework passes, mission is done", () => {
+    const mission = store.createMission("Review mission");
+    store.submitPlan(mission.id, plan);
+    store.approvePlan(mission.id);
+    const worker = hire();
+    store.assignTask(mission.id, "t_001", worker.id, { goal: "Fix" });
+    store.markTaskRunning(mission.id, "t_001");
+    store.saveRawReport(mission.id, "t_001", '{"status":"done"}');
+    store.completeTask(mission.id, "t_001", { status: "done" });
+
+    const reviewer = store.hireStaff({
+      persona: "reviewer",
+      grade: "G3",
+      agent: "squad-reviewer",
+      provider: "deepseek",
+      model: "deepseek-v4-pro",
+      variant: "high",
+      sessionID: "ses_review_1",
+    });
+
+    store.assignReview(mission.id, "t_001", reviewer.id, "ses_review_1");
+    expect(store.requireTask(mission.id, "t_001").status).toBe("in_review");
+    store.saveVerdict(mission.id, "t_001", {
+      verdict: "fail",
+      severity: "high",
+      findings: [
+        { id: "F1", claim: "missing", evidence: "report:1", required_fix: "add it" },
+      ],
+      checked: ["diff", "acceptance"],
+    });
+    expect(store.requireTask(mission.id, "t_001").status).toBe("returned");
+    expect(store.requireMission(mission.id).status).toBe("executing");
+
+    const rework = store.assignTask(mission.id, "t_001", worker.id, { goal: "Rework" });
+    expect(rework.attempts).toBe(1);
+    store.markTaskRunning(mission.id, "t_001");
+    store.saveRawReport(mission.id, "t_001", '{"status":"done","summary":"fixed"}');
+    store.completeTask(mission.id, "t_001", { status: "done", summary: "fixed" });
+
+    store.assignReview(mission.id, "t_001", reviewer.id, "ses_review_2");
+    store.saveVerdict(mission.id, "t_001", {
+      verdict: "pass",
+      severity: "low",
+      findings: [],
+      checked: ["diff", "tests", "acceptance"],
+    });
+
+    expect(store.requireTask(mission.id, "t_001").status).toBe("integrated");
+    expect(store.requireMission(mission.id).status).toBe("done");
+    const score = store.scorecard(worker.id);
+    expect(score.passAt1).toBe(0);
+    expect(score.rework).toBe(1);
+    expect(score.tasks).toBe(1);
+  });
+
+  test("appraises, clamps score, changes grade, and fires with evidence", () => {
+    const staff = hire();
+    expect(store.appraiseStaff(staff.id, 0.7, "good").score).toBeCloseTo(0.7);
+    expect(store.appraiseStaff(staff.id, 0.7, "great").score).toBe(1);
+    expect(store.listAppraisals(staff.id)).toHaveLength(2);
+
+    expect(store.changeGrade(staff.id, "up").grade).toBe("G3");
+    expect(store.changeGrade(staff.id, "down").grade).toBe("G2");
+
+    expect(() => store.fireStaff(staff.id, "bad work", "")).toThrow("evidence_ref");
+    const fired = store.fireStaff(staff.id, "bad work", "verdict:F1");
+    expect(fired.status).toBe("fired");
+    expect(store.isBlacklisted("implementer", "G2")).toBe(true);
+    expect(store.isBlacklisted("implementer", "G3")).toBe(false);
+    expect(store.countBlacklist()).toBe(1);
+  });
 });

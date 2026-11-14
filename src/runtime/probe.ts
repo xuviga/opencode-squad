@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode/plugin";
-import { extractAssistantText } from "./messages";
+import { extractLastAssistantText } from "./messages";
 
 export type ProbeOptions = {
   prompt?: string;
@@ -107,7 +107,7 @@ export async function runSessionProbe(
     steps.push({ step: "context", at: now() });
     const messages = await ctx.session.context({ sessionID: child.id });
     result.messageCount = messages.length;
-    result.assistantText = extractAssistantText(messages);
+    result.assistantText = extractLastAssistantText(messages);
 
     steps.push({ step: "session-info", at: now() });
     const info = await ctx.session.get({ sessionID: child.id });

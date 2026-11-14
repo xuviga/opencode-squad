@@ -64,6 +64,11 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
           const sessionID = staff.sessionID;
           if (!sessionID) throw new Error(`staff has no session: ${staff.id}`);
 
+          const previousVerdict = task.verdict as
+            | { verdict?: string; severity?: string; findings?: unknown[] }
+            | undefined;
+          const isRework = task.status === "returned";
+
           const brief = {
             task_id: task.id,
             mission_id: task.missionID,
@@ -76,11 +81,20 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             constraints: args.constraints ?? {},
             capabilities: args.capabilities ?? [],
             output_schema: "report_v1",
+            ...(isRework && previousVerdict
+              ? {
+                  rework: true,
+                  attempt: task.attempts + 1,
+                  previous_verdict: previousVerdict,
+                }
+              : {}),
           };
 
           const prompt = [
             `You are SQUAD ${staff.persona} at grade ${staff.grade}.`,
-            "Complete the task described in the Task Brief below.",
+            isRework
+              ? "This is a rework. Address every finding from the previous verdict and provide the actual deliverable, not a description of it."
+              : "Complete the task described in the Task Brief below.",
             "Return ONLY one JSON object, without markdown fences, matching this schema:",
             JSON.stringify(REPORT_SCHEMA, null, 2),
             "Task Brief:",
