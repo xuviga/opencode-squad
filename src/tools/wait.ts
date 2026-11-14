@@ -1,5 +1,6 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
+import { commitWorktree, type WorktreeCommit } from "../runtime/commit";
 import { extractLastAssistantText } from "../runtime/messages";
 import { fail, ok } from "./result";
 
@@ -109,6 +110,36 @@ export async function registerWaitTool(ctx: Plugin.Context, store: SquadStore) {
           }
 
           const messages = await ctx.session.context({ sessionID });
+
+          let worktreeCommit: WorktreeCommit | undefined;
+          if (staff?.worktreeDirectory) {
+            try {
+              worktreeCommit = commitWorktree(
+                staff.worktreeDirectory,
+                `squad(${task.id}): ${task.title}`,
+              );
+              if (worktreeCommit.committed) {
+                store.addEvent(args.mission_id, args.task_id, "worktree.committed", {
+                  commit: worktreeCommit.commit,
+                  files: worktreeCommit.files,
+                });
+              }
+            } catch (error) {
+              const message = errorMessage(error);
+              const failed = store.failTask(
+                args.mission_id,
+                args.task_id,
+                `worktree auto-commit failed: ${message}`,
+              );
+              return ok({
+                timedOut: false,
+                task: failed,
+                error: message,
+                worktree_commit_error: true,
+              });
+            }
+          }
+
           const rawReport = extractLastAssistantText(messages);
           const info = await ctx.session.get({ sessionID });
 
@@ -135,6 +166,7 @@ export async function registerWaitTool(ctx: Plugin.Context, store: SquadStore) {
             raw_report: rawReport,
             cost: info.cost,
             tokens: info.tokens,
+            worktree_commit: worktreeCommit,
           });
         } catch (error) {
           return fail(error);
