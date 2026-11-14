@@ -19,7 +19,7 @@ export const PERSONAS: Record<string, PersonaSpec> = {
   reviewer: { defaultGrade: "G4", agent: "squad-reviewer", access: "read-only" },
   critic: { defaultGrade: "G4", agent: "squad-reviewer", access: "read-only" },
   integrator: { defaultGrade: "G4", agent: "build", access: "shell" },
-  auditor: { defaultGrade: "G2", agent: "explore", access: "read-only" },
+  auditor: { defaultGrade: "G2", agent: "squad-auditor", access: "read-only" },
   arbiter: { defaultGrade: "G4", agent: "squad-arbiter", access: "read-only" },
   scribe: { defaultGrade: "G1", agent: "build", access: "write" },
 };

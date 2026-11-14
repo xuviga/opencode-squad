@@ -1430,7 +1430,8 @@ export class SquadStore {
     verdict?: unknown;
     notes?: string;
   }): Audit {
-    const task = this.requireTask(input.missionID, input.taskID);
+    const isTaskAudit = input.kind === "second_review";
+    const task = isTaskAudit ? this.requireTask(input.missionID, input.taskID) : undefined;
     const id = `a_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
     const timestamp = now();
     const record = this.db.transaction(() => {
@@ -1454,28 +1455,43 @@ export class SquadStore {
         );
 
       if (input.status === "fail") {
-        this.db
-          .query(
-            `UPDATE tasks SET status = 'returned', updated_at = ?
-             WHERE mission_id = ? AND id = ?`,
-          )
-          .run(timestamp, input.missionID, input.taskID);
-        this.db
-          .query(
-            `UPDATE missions SET status = 'executing', updated_at = ?
-             WHERE id = ?`,
-          )
-          .run(timestamp, input.missionID);
-        this.penalize(task.reviewerStaffID, -0.3, `false pass audit ${id}`);
-        this.addLesson(
-          input.missionID,
-          input.taskID,
-          `False pass audit ${id}: ${input.notes ?? "second review failed"}`,
-          ["audit", "false_pass"],
-        );
-        this.addEvent(input.missionID, input.taskID, "audit.false_pass", { auditID: id });
+        if (isTaskAudit && task) {
+          this.db
+            .query(
+              `UPDATE tasks SET status = 'returned', updated_at = ?
+               WHERE mission_id = ? AND id = ?`,
+            )
+            .run(timestamp, input.missionID, input.taskID);
+          this.db
+            .query(
+              `UPDATE missions SET status = 'executing', updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(timestamp, input.missionID);
+          this.penalize(task.reviewerStaffID, -0.3, `false pass audit ${id}`);
+          this.addLesson(
+            input.missionID,
+            input.taskID,
+            `False pass audit ${id}: ${input.notes ?? "second review failed"}`,
+            ["audit", "false_pass"],
+          );
+          this.addEvent(input.missionID, input.taskID, "audit.false_pass", { auditID: id });
+        } else {
+          this.addLesson(
+            input.missionID,
+            input.taskID === "mission" ? null : input.taskID,
+            `Process audit ${id}: ${input.notes ?? "process failed"}`,
+            ["audit", "process"],
+          );
+          this.addEvent(input.missionID, null, "audit.process_failed", { auditID: id });
+        }
       } else {
-        this.addEvent(input.missionID, input.taskID, "audit.passed", { auditID: id });
+        this.addEvent(
+          input.missionID,
+          isTaskAudit ? input.taskID : null,
+          isTaskAudit ? "audit.passed" : "audit.process_passed",
+          { auditID: id },
+        );
       }
     });
     record();

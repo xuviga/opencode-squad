@@ -362,4 +362,22 @@ describe("SquadStore", () => {
       true,
     );
   });
+
+  test("a process audit does not regress task status", () => {
+    const mission = store.createMission("Process audit mission");
+    const audit = store.recordAudit({
+      missionID: mission.id,
+      taskID: "mission",
+      kind: "process",
+      status: "fail",
+      reviewerStaffID: "s_process",
+      verdict: { status: "fail", findings: [{ id: "P1" }] },
+      notes: "no review before integration",
+    });
+    expect(audit.kind).toBe("process");
+    expect(store.requireMission(mission.id).status).toBe("draft");
+    expect(store.listLessons(mission.id).some((lesson) => lesson.tags.includes("process"))).toBe(
+      true,
+    );
+  });
 });

@@ -22,7 +22,7 @@
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
 | M4 Параллель и изоляция | 🟡 happy path | worktree/DAG/finalize/radar работают; conflict merge и parallel stress не тестировались |
-| M5 Споры, арбитр, аудитор | 🟡 в работе | disputes/arbiter/lessons + second-review/false-pass; live audit pass; dispute rule live не тестирован; process auditor нет |
+| M5 Споры, арбитр, аудитор | 🟡 core complete | disputes/arbiter/lessons, second-review + process auditor; live process audit нашёл реальные дефекты |
 | M6 Универсальные классы | ⚪ не начат | — |
 | M7 Закалка | ⚪ не начат | — |
 
@@ -144,7 +144,11 @@
 
 **M5 live result**
 
-- `squad_audit` на `m_e872b7f0/t_001`: второй ревьюер `s_18904c07` (G3) получил worktree-diff, вернул `pass/low`; audit `a_ae53e211`; cost `$0.00154968`; mission осталась `done`.
+- `squad_audit` task на `m_e872b7f0/t_001`: второй ревьюер `s_18904c07` (G3) получил worktree-diff, вернул `pass/low`; audit `a_ae53e211`; cost `$0.00154968`; mission осталась `done`.
+- `squad_audit` process на `m_e872b7f0`: auditor `s_7f26bc62` (G2, no tools) вернул **fail** с 3 findings; audit `a_ca658396`; cost `$0.0042789`.
+  - P1: second-review audit выполнен после `mission.done`.
+  - P2: нет события merge/cherry-pick из detached-HEAD worktree в main.
+  - P3: три раунда review использовали один `report.captured`, `attempts=0`.
 - Disputes live не запускались (unit: open → 2 replies → round limit → ruling worker → task submitted, reviewer −0.2, lesson).
 
 **Структура**
@@ -158,6 +162,7 @@ src/
   report.ts             TaskReport + парсер
   verdict.ts            Verdict + pass/fail правила
   ruling.ts             Ruling арбитра + parser
+  process-audit.ts      process audit schema/parser
   json.ts               последний JSON-объект
   personas.ts           персоны, грейды, agent mapping, permissions
   runtime/probe.ts      M0.0 probe
@@ -191,6 +196,7 @@ src/
 .opencode/agents/
   squad-reviewer.md     blind reviewer, no tools, steps 2
   squad-arbiter.md      arbiter, no tools, steps 2
+  squad-auditor.md      process auditor, no tools, steps 2
 dev/
   opencode.jsonc        локальная загрузка плагина
   M1_PROMPT.md          M1 smoke
@@ -202,6 +208,7 @@ dev/
   M4_DIAG.md            M4 diff diagnostic
   M4_FINAL.md           M4 final gate
   M5_PROMPT.md          M5 audit smoke
+  M5_PROCESS.md         M5 process audit smoke
   one-line-proof.txt    artifact M2
 scripts/
   probe-client.ts
@@ -215,6 +222,8 @@ tests/
   plan.test.ts
   report.test.ts
   verdict.test.ts
+  ruling.test.ts
+  process-audit.test.ts
   messages.test.ts
   store.test.ts
 ```
@@ -224,7 +233,7 @@ tests/
 | Команда/сценарий | Результат |
 |---|---|
 | `bun run typecheck` | ✅ без ошибок |
-| `bun test` | ✅ 34 pass, 0 fail, 92 expect |
+| `bun test` | ✅ 39 pass, 0 fail, 99 expect |
 | `bun run probe` | ✅ `SQUAD_PROBE_OK`, cost `$0.000251` |
 | `bun run probe:interrupt` | ✅ `interrupted:true` |
 | M1 live | ✅ writer report `done`, ledger `$0.0023631` |
@@ -232,6 +241,7 @@ tests/
 | M3 live | ✅ appraise/fire/blacklist; повторный hire отклонён |
 | M4 live | ✅ worktree `squad-implementer-145026`, git-diff `dev/m4-proof.txt`, pass, mission `done`, budget `$0.010374` |
 | M5 audit live | ✅ second review `pass/low`, audit `a_ae53e211`, cost `$0.00154968` |
+| M5 process audit live | ❌ fail с 3 findings: audit after done, no merge event, one report capture across 3 rounds; cost `$0.0042789` |
 
 **Найдено и исправлено**
 
@@ -245,24 +255,26 @@ tests/
 8. `ctx.vcs.diff({ location })` игнорирует location, `ctx.session.diff` недоступен; worktree-diff читается через git (`HEAD^` + working), reviewer видит committed changes.
 9. Second review использует того же no-tools reviewer и worktree-diff; false pass возвращает task и штрафует первого ревизора.
 10. Dispute round limit 2 enforced; arbiter получает только claim/messages/brief/report/verdict/diff.
+11. Process auditor без инструментов нашёл реальные дефекты: audit после `done`, отсутствие merge-события, повторный review одного capture.
 
 **Открытые вопросы**
 
 - TUI-панель M0 ещё не начата.
 - Dispute `rule` live-тест не проведён (unit-тест покрывает).
-- Process auditor (аудит процесса босса) не реализован; `squad_audit` пока только task second review.
-- 10% sampling реализован как «первая unaudited integrated task», не рандомизирован.
+- Process audit P1: второй review должен идти до `mission.integrating/done` или mission остаётся открытой до audit pass.
+- Process audit P2: нет merge/cherry-pick worktree → main; `integrated` сейчас означает «принято», а не «слито».
+- Process audit P3: rework должен писать новый `report.captured` и увеличивать attempts; сейчас три раунда могли смотреть один отчёт.
+- 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
-- M4 conflict merge не реализован: `squad_finalize` — гейт статуса, а не слияние worktree в main.
 - Параллельный найм технически возможен, но stress-тест 3+ задач не проводился.
 - Worktree на detached HEAD; для merge нужен cherry-pick/branch.
 - `.squad/squad.db` project-local.
-- Git: `160f210` (M4); M5 — следующий коммит.
+- Git: `0048b13` (M5 core); process-audit fixes — следующий коммит.
 
 **Дальше**
 
-1. **M5 finish** — live dispute rule, process auditor, рандомный 10% sample.
-2. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
-3. M4 merge: cherry-pick/branch worktree → main, conflict detection.
-4. Stress-тест 3 параллельных задач и лимит параллельного найма.
+1. **Fix process audit P1–P3**: audit gate before finalize; merge evidence; fresh report per rework.
+2. **M4 merge**: cherry-pick/branch worktree → main, conflict detection.
+3. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
+4. Live dispute rule + stress-тест 3 параллельных задач.
 5. Live-тест timeout + замена зависшего сотрудника.

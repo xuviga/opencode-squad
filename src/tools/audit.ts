@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { nextGrade } from "../personas";
+import { parseProcessAuditText } from "../process-audit";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { extractLastAssistantText } from "../runtime/messages";
@@ -8,7 +9,7 @@ import { parseVerdictText } from "../verdict";
 import { fail, ok } from "./result";
 
 type AuditInput = {
-  action?: "task" | "sample";
+  action?: "task" | "sample" | "process";
   mission_id?: string;
   task_id?: string;
   timeout_ms?: number;
@@ -129,6 +130,94 @@ async function runTaskAudit(
   };
 }
 
+async function runProcessAudit(
+  ctx: Plugin.Context,
+  store: SquadStore,
+  missionID: string,
+  parentSessionID: string,
+  timeoutMs: number,
+) {
+  const mission = store.requireMission(missionID);
+  const payload = {
+    mission,
+    plan: store.getPlan(missionID),
+    tasks: store.listTasks(missionID).map(({ brief, rawReport, ...task }) => task),
+    staff: store.listStaff(100),
+    budget: store.budgetSummary(missionID),
+    events: store.listEvents(missionID, 100),
+    disputes: store.listDisputes(missionID),
+    audits: store.listAudits(missionID),
+    lessons: store.listLessons(missionID),
+  };
+
+  const auditor = await hireEmployee(ctx, store, {
+    missionID,
+    persona: "auditor",
+    grade: "G2",
+    parentSessionID,
+    title: `SQUAD process auditor for ${missionID}`,
+  });
+
+  const prompt = [
+    "You are SQUAD process auditor. Review only the process in the mission report JSON.",
+    "Return ONLY one JSON object, without markdown fences:",
+    '{"status":"pass | fail","summary":"short verdict","findings":[{"id":"P1","claim":"...","evidence":"...","required_fix":"..."}]}',
+    "A fail must contain at least one finding with evidence.",
+    "Mission report JSON:",
+    JSON.stringify(payload, null, 2).slice(0, 32_000),
+  ].join("\n\n");
+
+  await ctx.session.prompt({
+    sessionID: auditor.sessionID,
+    text: prompt,
+    delivery: "queue",
+  });
+  await ctx.session.wait(
+    { sessionID: auditor.sessionID },
+    { signal: AbortSignal.timeout(Math.max(5_000, Math.min(timeoutMs, 600_000))) },
+  );
+
+  const info = await ctx.session.get({ sessionID: auditor.sessionID });
+  if (!store.hasLedgerEntry(missionID, "mission", auditor.sessionID)) {
+    store.recordLedger({
+      missionID,
+      taskID: "mission",
+      staffID: auditor.staff.id,
+      sessionID: auditor.sessionID,
+      provider: auditor.staff.provider,
+      model: auditor.staff.model,
+      variant: auditor.staff.variant,
+      inputTokens: info.tokens.input,
+      outputTokens: info.tokens.output,
+      cost: info.cost,
+    });
+  }
+
+  const messages = await ctx.session.context({ sessionID: auditor.sessionID });
+  const rawAudit = extractLastAssistantText(messages);
+  const processAudit = parseProcessAuditText(rawAudit);
+  const audit = store.recordAudit({
+    missionID,
+    taskID: "mission",
+    kind: "process",
+    status: processAudit.status,
+    reviewerStaffID: auditor.staff.id,
+    reviewerSessionID: auditor.sessionID,
+    verdict: processAudit,
+    notes: processAudit.summary,
+  });
+
+  return {
+    audit,
+    process_audit: processAudit,
+    auditor: auditor.staff,
+    auditor_session_id: auditor.sessionID,
+    cost: info.cost,
+    tokens: info.tokens,
+    raw_audit: rawAudit,
+  };
+}
+
 export async function registerAuditTool(ctx: Plugin.Context, store: SquadStore) {
   return ctx.tool.transform((editor) => {
     editor.add({
@@ -138,7 +227,7 @@ export async function registerAuditTool(ctx: Plugin.Context, store: SquadStore) 
       input: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["task", "sample"] },
+          action: { type: "string", enum: ["task", "sample", "process"] },
           mission_id: { type: "string" },
           task_id: { type: "string" },
           timeout_ms: { type: "number" },
@@ -160,6 +249,17 @@ export async function registerAuditTool(ctx: Plugin.Context, store: SquadStore) 
             resources: [args.task_id ?? args.mission_id],
           });
 
+          if (args.action === "process") {
+            const result = await runProcessAudit(
+              ctx,
+              store,
+              missionID,
+              context.sessionID,
+              args.timeout_ms ?? 300_000,
+            );
+            return ok(result);
+          }
+
           if (args.action === "task") {
             if (!args.task_id) throw new Error("task_id is required");
             const result = await runTaskAudit(
@@ -179,7 +279,7 @@ export async function registerAuditTool(ctx: Plugin.Context, store: SquadStore) 
           if (candidates.length === 0) {
             return ok({ sampled: 0, message: "no unaudited integrated tasks" });
           }
-          const target = candidates[0]!;
+          const target = candidates[Math.floor(Math.random() * candidates.length)]!;
           const result = await runTaskAudit(
             ctx,
             store,
