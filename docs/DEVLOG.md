@@ -441,7 +441,7 @@ tests/
 **Открытые вопросы**
 
 - Генерация raster с нуля (`squad_image`) по-прежнему требует image-модель; preview существующего SVG и vision-анализ работают без неё.
-- TUI wiring покрыт unit-тестом, но живой визуальный прогон под TTY всё ещё не выполнен.
+- TUI wiring покрыт unit-тестом, но живой визуальный прогон под TTY всё ещё не выполнен. Попытка `testRender` панели в Bun test упирается в server-build `solid-js` (`Orphan text`), поэтому render-тест не включён.
 - `session.wait` не ждёт `session.shell`; timeout-ветка покрыта fake-session тестом.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.

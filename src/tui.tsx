@@ -27,7 +27,7 @@ type SquadState = {
   disputes: unknown[];
 };
 
-function SquadPanel(props: { panel: PanelInput }) {
+export function SquadPanel(props: { panel: PanelInput }) {
   const context = usePlugin();
   const [state, setState] = createSignal<SquadState | null>(null);
   const [error, setError] = createSignal<string | null>(null);
