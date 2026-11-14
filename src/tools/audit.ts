@@ -66,6 +66,13 @@ async function runTaskAudit(
     "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
     `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
     "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
+    ...(diff &&
+    typeof diff === "object" &&
+    (diff as { worktree?: { head?: string } }).worktree?.head
+      ? [
+          `Worktree commit: ${(diff as { worktree: { head: string; subject?: string; dirty?: boolean } }).worktree.head} (${(diff as { worktree: { subject?: string } }).worktree.subject ?? "no subject"}); working tree: ${(diff as { worktree: { dirty?: boolean } }).worktree.dirty ? "dirty" : "clean"}. The orchestrator auto-commits the worktree after the worker report, so the report may predate this commit.`,
+        ]
+      : []),
     "Return ONLY one JSON object, without markdown fences, matching this schema:",
     JSON.stringify(VERDICT_SCHEMA, null, 2),
     `Rules: a pass must have checked containing ${requiredChecks(task.class).join(", ")}; a fail needs at least one finding with concrete evidence.`,

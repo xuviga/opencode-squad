@@ -91,14 +91,21 @@ export async function taskDiff(
   if (staff?.worktreeDirectory) {
     directory = staff.worktreeDirectory as typeof directory;
     const data = worktreeDiff(directory);
-    if (data.length > 0) {
-      return {
-        requested_directory: directory,
-        location: { directory },
-        source: "git-worktree",
-        data,
-      };
-    }
+    const head = git(["rev-parse", "HEAD"], directory).trim();
+    const subject = git(["log", "-1", "--pretty=%s"], directory).trim();
+    const dirty = git(["status", "--porcelain"], directory).trim();
+    return {
+      requested_directory: directory,
+      location: { directory },
+      source: "git-worktree",
+      worktree: {
+        directory,
+        head,
+        subject,
+        dirty: dirty.length > 0,
+      },
+      data,
+    };
   } else if (task.sessionID) {
     try {
       const info = await ctx.session.get({ sessionID: task.sessionID });

@@ -93,6 +93,11 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             diff = { error: error instanceof Error ? error.message : String(error) };
           }
           const diffText = JSON.stringify(diff, null, 2).slice(0, 24_000);
+          const worktree = (
+            diff && typeof diff === "object" ? (diff as {
+              worktree?: { head?: string; subject?: string; dirty?: boolean };
+            }).worktree : undefined
+          );
 
           const prompt = [
             `You are SQUAD ${reviewerPersona} at grade ${reviewerGrade}.`,
@@ -102,6 +107,11 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
             `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
             "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
+            ...(worktree?.head
+              ? [
+                  `Worktree commit: ${worktree.head} (${worktree.subject ?? "no subject"}); working tree: ${worktree.dirty ? "dirty" : "clean"}. The orchestrator auto-commits the worktree after the worker report, so the report may predate this commit; judge commit claims by this metadata, not by the report.`,
+                ]
+              : []),
             "Return ONLY one JSON object, without markdown fences, matching this schema:",
             JSON.stringify(VERDICT_SCHEMA, null, 2),
             `Rules: a pass must have checked containing ${requiredChecks(task.class).join(", ")}; a fail must have at least one finding with concrete evidence.`,
