@@ -66,6 +66,7 @@ async function runTaskAudit(
     "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
     `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
     "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
+    "External assets means remote URLs, @font-face rules, <image>, data: URIs or embedded binaries; font-family names for locally installed fonts are allowed.",
     ...(diff &&
     typeof diff === "object" &&
     (diff as { worktree?: { head?: string } }).worktree?.head
