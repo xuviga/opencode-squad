@@ -14,10 +14,12 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "probe": "bun run scripts/probe-client.ts",
     "probe:keep": "bun run scripts/probe-client.ts --keep",
     "probe:interrupt": "bun run scripts/probe-interrupt.ts",
-    "smoke:store": "bun run scripts/smoke-store.ts"
+    "smoke:store": "bun run scripts/smoke-store.ts",
+    "inspect": "bun run scripts/inspect.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.3.0"

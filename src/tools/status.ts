@@ -75,6 +75,8 @@ export async function registerStatusTool(ctx: Plugin.Context, store: SquadStore)
             externalPlugins: plugins.filter((plugin) => plugin.source.type !== "builtin").length,
             sessions: sessions.data.length,
             missions: store.countMissions(),
+            staff: store.countStaff(),
+            tasks: store.countTasks(),
           },
           deepseek,
           grades: gradeSnapshot(),

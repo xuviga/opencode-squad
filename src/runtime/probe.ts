@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode/plugin";
+import { extractAssistantText } from "./messages";
 
 export type ProbeOptions = {
   prompt?: string;
@@ -39,23 +40,6 @@ function now(): string {
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return `${error.name}: ${error.message}`;
   return String(error);
-}
-
-export function extractAssistantText(messages: readonly unknown[]): string {
-  const parts: string[] = [];
-  for (const message of messages) {
-    if (!message || typeof message !== "object") continue;
-    const record = message as { type?: string; content?: unknown };
-    if (record.type !== "assistant" || !Array.isArray(record.content)) continue;
-    for (const part of record.content) {
-      if (!part || typeof part !== "object") continue;
-      const content = part as { type?: string; text?: unknown };
-      if (content.type === "text" && typeof content.text === "string") {
-        parts.push(content.text);
-      }
-    }
-  }
-  return parts.join("\n").trim();
 }
 
 /**

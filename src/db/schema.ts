@@ -85,4 +85,21 @@ CREATE INDEX IF NOT EXISTS idx_ledger_mission_created ON ledger(mission_id, crea
 CREATE INDEX IF NOT EXISTS idx_missions_status_updated ON missions(status, updated_at);
 `,
   },
+  {
+    version: 2,
+    name: "assignments",
+    sql: `
+ALTER TABLE tasks ADD COLUMN staff_id TEXT;
+ALTER TABLE tasks ADD COLUMN session_id TEXT;
+ALTER TABLE tasks ADD COLUMN assigned_at TEXT;
+ALTER TABLE tasks ADD COLUMN raw_report TEXT;
+ALTER TABLE tasks ADD COLUMN ledger_recorded INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE staff ADD COLUMN agent TEXT;
+ALTER TABLE staff ADD COLUMN provider TEXT;
+ALTER TABLE staff ADD COLUMN model TEXT;
+ALTER TABLE staff ADD COLUMN variant TEXT;
+CREATE INDEX IF NOT EXISTS idx_tasks_staff ON tasks(staff_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id);
+`,
+  },
 ];

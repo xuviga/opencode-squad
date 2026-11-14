@@ -1,11 +1,16 @@
 import { Plugin } from "@opencode/plugin";
 import { openSquadDb } from "./db/index";
 import { SquadStore } from "./db/store";
+import { registerAssignTool } from "./tools/assign";
 import { registerBudgetTool } from "./tools/budget";
+import { registerCheckTool } from "./tools/check";
+import { registerHireTool } from "./tools/hire";
 import { registerMissionTool } from "./tools/mission";
 import { registerPlanTool } from "./tools/plan";
 import { registerProbeTool } from "./tools/probe";
+import { registerStaffTool } from "./tools/staff";
 import { registerStatusTool } from "./tools/status";
+import { registerWaitTool } from "./tools/wait";
 import { VERSION } from "./version";
 
 export default Plugin.define({
@@ -20,6 +25,11 @@ export default Plugin.define({
       registerMissionTool(ctx, store),
       registerPlanTool(ctx, store),
       registerBudgetTool(ctx, store),
+      registerHireTool(ctx, store),
+      registerStaffTool(ctx, store),
+      registerAssignTool(ctx, store),
+      registerWaitTool(ctx, store),
+      registerCheckTool(ctx, store),
     ]);
 
     console.log(

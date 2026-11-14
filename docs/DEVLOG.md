@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 завершён · M0 server-side каркас в работе**
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 happy path ✅**; TUI и M2 впереди
 
 ## Как ведётся журнал
 
@@ -17,9 +17,9 @@
 | Этап | Статус | Примечание |
 |---|---|---|
 | M0.0 Capability probe | ✅ завершён | probe-плагин и standalone probe работают |
-| M0 Каркас + TUI + план-гейт | 🟡 в работе | server-side: SQLite, mission/plan/budget; TUI ещё нет |
-| M1 Найм и работа | ⚪ не начат | — |
-| M2 Ревизия и возврат | ⚪ не начат | — |
+| M0 Каркас + TUI + план-гейт | 🟡 server-side готов | SQLite, mission/plan/budget, план-гейт; TUI нет |
+| M1 Найм и работа | 🟡 happy path готов | hire/assign/wait/check; timeout live test и замена — частично |
+| M2 Ревизия и возврат | ⚪ не начат | следующий приоритет |
 | M3 HR и карьера | ⚪ не начат | — |
 | M4 Параллель и изоляция | ⚪ не начат | — |
 | M5 Споры, арбитр, аудитор | ⚪ не начат | — |
@@ -28,93 +28,120 @@
 
 ## Журнал
 
-### 2026-11-14 · Сессия 1 — старт, M0.0 probe, M0 server-side
+### 2026-11-14 · Сессия 1 — старт, M0.0, M0 server-side
 
 **Сделано**
 
-- [x] Изучен `docs/PLAN.md` (v0.3), цель зафиксирована: мультиагентный плагин под OpenCode 2.3.0.
+- [x] Изучен `docs/PLAN.md` (v0.3), цель: мультиагентный плагин под OpenCode 2.3.0.
 - [x] Проверен фундамент API: `@opencode/plugin@2.3.0`, `@opencode/client@2.3.0`, хост `opencode v2.3.0`.
 - [x] Создан журнал разработки.
 - [x] Каркас: `package.json`, `tsconfig.json`, `.gitignore`, `dev/opencode.jsonc`.
 - [x] Плагин `src/index.ts` с `Plugin.define` и id `squad`.
-- [x] `src/tools/status.ts` — `squad_status`, снимок Capability Registry.
-- [x] `src/runtime/probe.ts` + `src/tools/probe.ts` — `squad_probe`: create child → prompt → wait → context/diff → interrupt → cleanup.
-- [x] `scripts/probe-client.ts` — standalone probe через `@opencode/client` + `Service.ensure()`.
-- [x] `scripts/probe-interrupt.ts` — проверка прерывания работающей дочерней сессии.
-- [x] `scripts/smoke-store.ts` — проверка SQLite-потока mission → plan → approve → budget.
-- [x] SQLite: `src/db/schema.ts` (migration 001), `src/db/index.ts`, `src/db/store.ts`.
-- [x] M0 server-side tools: `squad_mission`, `squad_plan`, `squad_budget`.
-- [x] Валидация плана: `src/plan.ts` (классы задач, грейды, acceptance, зависимости).
-- [x] Typecheck проходит.
+- [x] `squad_status` — снимок Capability Registry.
+- [x] `squad_probe` — create child → prompt → wait → context/diff → interrupt → cleanup.
+- [x] `scripts/probe-client.ts`, `scripts/probe-interrupt.ts`.
+- [x] SQLite: migration 001, `openSquadDb`, `SquadStore`.
+- [x] `squad_mission`, `squad_plan`, `squad_budget`; валидация плана.
+- [x] Typecheck, live probe, interrupt probe, SQLite smoke.
+
+### 2026-11-14 · Сессия 2 — M1: hire / assign / wait / check
+
+**Сделано**
+
+- [x] Migration 002: assignment-колонки в `tasks`, model-колонки в `staff`.
+- [x] `src/personas.ts`: 13 персон, default-грейды, agent mapping, access-политика.
+- [x] `src/report.ts`: валидация Report и извлечение JSON из markdown-обёртки.
+- [x] `squad_hire` — child-сессия + staff-запись; grade → model/variant; permissions по access.
+- [x] `squad_staff` — list/get.
+- [x] `squad_assign` — Task Brief, prompt сотруднику, task `assigned → running`.
+- [x] `squad_wait` — wait, raw report, ledger из per-session cost/tokens, task `submitted`.
+- [x] `squad_check` — валидация Report, задача `submitted`, diff.
+- [x] `maybeAdvanceMission`: все задачи submitted → mission `reviewing`.
+- [x] 15 unit-тестов: `validatePlan`, `validateReport`, `SquadStore`.
+- [x] Версия плагина `0.2.0`.
 
 **Структура**
 
 ```text
 src/
   index.ts              Plugin.define + регистрация tools
-  version.ts            версия плагина
-  config.ts             дефолтные грейды G0–G4, бюджет, пути
-  plan.ts               типы и валидация MissionPlan
-  runtime/probe.ts      M0.0 probe через Plugin.Context
-  db/schema.ts          migration 001
-  db/index.ts           openSquadDb + PRAGMA + миграции
-  db/store.ts           SquadStore: missions/tasks/events/ledger
+  version.ts            версия 0.2.0
+  config.ts             грейды G0–G4, бюджет, пути
+  plan.ts               MissionPlan + валидация
+  report.ts             TaskReport + парсер
+  personas.ts           персоны, грейды, agent mapping, permissions
+  runtime/probe.ts      M0.0 probe
+  runtime/messages.ts   извлечение assistant text
+  db/schema.ts          migrations 001 + 002
+  db/index.ts           openSquadDb + WAL + миграции
+  db/store.ts           missions/tasks/staff/events/ledger
   tools/status.ts       squad_status
   tools/probe.ts        squad_probe
   tools/mission.ts      squad_mission
   tools/plan.ts         squad_plan
   tools/budget.ts       squad_budget
+  tools/hire.ts         squad_hire
+  tools/staff.ts        squad_staff
+  tools/assign.ts       squad_assign
+  tools/wait.ts         squad_wait
+  tools/check.ts        squad_check
 scripts/
   probe-client.ts       standalone API probe
-  smoke-store.ts        SQLite smoke
+  probe-interrupt.ts    interrupt работающей сессии
+  smoke-store.ts        SQLite smoke + ledger
+  inspect.ts            inspect mission/tasks/staff/budget
 dev/
-  opencode.jsonc        локальная загрузка плагина из ..
+  opencode.jsonc        локальная загрузка плагина
+  M1_PROMPT.md          воспроизводимый M1 smoke
+tests/
+  plan.test.ts
+  report.test.ts
+  store.test.ts
 ```
 
-**Команды и результаты**
+**Проверки**
 
 | Команда | Результат |
 |---|---|
-| `bun install` | 267 packages installed, 15.77s |
 | `bun run typecheck` | ✅ без ошибок |
-| `bun run probe` | ✅ `ok:true`, child session создан, ответ `SQUAD_PROBE_OK`, cost `$0.000251`, tokens 1647/7, diff `[]` |
-| `bun run probe:interrupt` | ✅ `interrupted:true`, outcome `interrupted`, child завершён до первого токена (cost 0) |
-| `opencode run --standalone ... "Use squad_status"` | ✅ плагин `squad` active, tools `squad_status`/`squad_probe` зарегистрированы; registry: 163 models, 8 agents, 111 tools, 9 skills |
-| `opencode run ... "Use squad_probe"` | ✅ `ok:true`, child `SES...`, ответ `SQUAD_PROBE_OK`, child удалён |
-| `bun run scripts/smoke-store.ts` | ✅ mission создана, draft → plan_gate → staffing, plan v1, ledger 1 entry, budget actual `$0.00025` |
-| `opencode run ... mission/plan/budget` | ✅ mission `m_dcf6814e`: create → plan_gate → staffing; budget scope mission |
+| `bun test` | ✅ 15 pass, 0 fail, 36 expect |
+| `bun run probe` | ✅ `SQUAD_PROBE_OK`, child session, cost `$0.000251` |
+| `bun run probe:interrupt` | ✅ `interrupted:true`, outcome `interrupted` |
+| `bun run smoke:store` | ✅ mission → plan_gate → staffing, ledger 1 entry, actual `$0.00025` |
+| M1 live: mission/plan/approve/hire/assign/wait/check | ✅ полный цикл, report `done`, ledger `$0.0023631` |
 
-**Подтверждено**
+**M1 live result**
 
-- `session.create({ parentID, agent, model: { id, providerID, variant }, permissions })` работает в plugin context.
-- `model.variant: "low"` реально выбирает DeepSeek Flash low; ответ пришёл за ~1.8 с, cost `$0.000251`.
-- `ctx.session.wait({ sessionID })` корректно ждёт idle.
-- `ctx.session.context` отдаёт assistant content; `SQUAD_PROBE_OK` извлечён.
-- `ctx.session.get` отдаёт per-session `cost`/`tokens`.
-- `ctx.vcs.diff({ mode: "working" })` работает; `ctx.session.diff` в plugin context отсутствует (client-only).
-- `ctx.session.remove` удаляет child-сессию.
-- SQLite `bun:sqlite` + WAL + миграция 001 работают в плагине.
+- Mission `m_002859ec`: `draft → plan_gate → staffing → executing → reviewing`.
+- Staff `s_c375538b`: persona `writer`, grade `G2`, agent `build`, model `deepseek-flash#high`, session `ses_e2698773cffedh70LPQPCcco3A`.
+- Worker report: `status:"done"`, summary про доказательство иррациональности √2.
+- Usage: cost `$0.0023631`, tokens input 14466 / output 124 / reasoning 198.
+- `squad_check`: report валиден, diff получен, task `submitted`.
+- `maybeAdvanceMission` перевёл миссию в `reviewing` после единственной submitted-задачи.
 
 **Найдено и исправлено**
 
 1. `ctx.model.list()` / `ctx.agent.list()` / `ctx.skill.list()` / `ctx.plugin.list()` возвращают `{ data }`, а не массив. `squad_status` исправлен.
-2. `squad_status` сначала печатал все 96 builtin-плагинов; теперь печатает только внешние + counts.
-3. `squad_mission` не возвращал `mission_id` верхним уровнем; добавлен, чтобы модель могла цепочкой вызвать `squad_plan`.
-4. `ctx.session.diff` отсутствует в `SessionDomain`; probe использует `ctx.vcs.diff`, PLAN §3/§3.1 исправлены.
-5. `interrupt` после idle возвращает `{ interrupted: false }` — это ожидаемо; отдельный тест прерывания **работающей** сессии ещё нужен.
+2. `squad_status` печатал все 96 builtin-плагинов; теперь только counts + внешние.
+3. `squad_mission` не возвращал `mission_id` верхним уровнем; добавлен для цепочек.
+4. `ctx.session.diff` отсутствует в `SessionDomain`; probe/check используют `ctx.vcs.diff`, PLAN §3/§3.1 исправлены.
+5. `squad_wait` после idle записывает ledger ровно один раз (`hasLedgerEntry`).
+6. `squad_assign` при ошибке prompt помечает task `failed`, чтобы можно было переназначить.
+7. `saveRawReport` теперь переводит task в `submitted` и вызывает `maybeAdvanceMission`.
 
 **Открытые вопросы**
 
-- ✅ Прерывание работающей сессии проверено: `probe:interrupt` → `interrupted:true`.
 - TUI-панель M0 ещё не начата.
-- `squad_status` в Code Mode возвращает JSON-строку; для цепочек удобнее `output`, но текущий контракт рабочий.
-- Нужно решить, где хранить `.squad/squad.db`: project-local сейчас; для глобального штата между проектами — отдельный data-dir.
-- Git инициализирован, initial commit `5cec9b7`.
+- Timeout-путь `squad_wait` реализован, но live-тест с зависшим сотрудником ещё не сделан; замена проверена unit-тестом store.
+- `ctx.vcs.diff` даёт diff всего проекта, не per-task; для изоляции нужен worktree (M4).
+- `squad_status` в Code Mode возвращает JSON-строку; для цепочек удобнее `output`.
+- `.squad/squad.db` project-local; для глобального штата между проектами нужен отдельный data-dir.
+- Git: initial commit `5cec9b7`; коммиты M1 — после стабилизации.
 
 **Дальше**
 
-1. Реализовать TUI-панель M0 (план, штат, расход).
-2. Добавить `squad_hire` / `squad_assign` (M1) и ledger-запись из per-session cost/tokens.
-3. Добавить unit-тесты для `validatePlan` и `SquadStore`.
-4. Добавить `squad_status` в компактном режиме и проверить после фильтра плагинов.
-5. Зафиксировать второй коммит с interrupt-тестом и обновлённым DEVLOG.
+1. **M2** — `squad_review`, `squad_verdict`, rework ≤2, blind-ревизор, `squad_report`.
+2. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
+3. Live-тест timeout + замена зависшего сотрудника.
+4. Worktree-изоляция для писателей (M4) и per-task diff.
+5. Коммит M1 и обновление PLAN §15 (фактические статусы).
