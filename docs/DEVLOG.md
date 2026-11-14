@@ -356,7 +356,8 @@ tests/
 | Synthesize step | ✅ writer G2, report submitted, artifact path записан |
 | Blind review synthesize | ✅ reviewer G3, pass/low |
 | Second-review audit | ✅ pass/low (1 non-blocking finding: claim без цитаты в evidence tail) |
-| Finalize | ⛔ `worktree of research_synthesize is not merged; run squad_integrate` |
+| Integrate synthesize | ✅ `alreadyMerged:true`, source `7f2a322`, main `2068b20` (worktree без собственного коммита) |
+| Finalize | ✅ mission `m_e6049e51` → `done`, cost `$0.036150276` |
 | `squad_image` без модели | ✅ понятная ошибка: no image model configured |
 | `squad_image` с `opencode/gpt-image-2.5-sunburst` | ⛔ `Generate.ProviderRequestError: This API key has expired` — вызов дошёл до провайдера, ключ окружения просрочен |
 
@@ -373,7 +374,7 @@ tests/
 - TUI panel code готов, но живой визуальный прогон `/squad` → approve/reject ещё не выполнен.
 - RPC `state` в shared service был недоступен, пока plugin location не прогрет; TUI использует тот же сервер, где plugin загружен.
 - `squad_image` заблокирован просроченным OpenCode API key; нужен валидный ключ для реальной генерации.
-- `m_e6049e51` в `integrating`: осталось `squad_integrate` для `research_synthesize`, затем `squad_finalize`.
+- `m_e6049e51` завершена: оба task integrated, audit pass, mission `done`, cost `$0.036150276`.
 - Dispute `rule` live-тест не проведён (unit-тест покрывает).
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
@@ -383,8 +384,8 @@ tests/
 
 **Дальше**
 
-1. `squad_integrate` + `squad_finalize` для `m_e6049e51`, зафиксировать mission `done`.
-2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-3. **Design class live** — после замены API key: `squad_image` + design template + review.
-4. Stress-тест 3 параллельных задач и live dispute `rule`.
+1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
+2. **Design class live** — после замены API key: `squad_image` + design template + review.
+3. Stress-тест 3 параллельных задач и live dispute `rule`.
+4. Live-тест timeout + замена зависшего сотрудника.
 5. M7: chaos-тесты, docs, release.
