@@ -148,4 +148,55 @@ ALTER TABLE staff ADD COLUMN worktree_directory TEXT;
 CREATE INDEX IF NOT EXISTS idx_staff_worktree ON staff(worktree_directory);
 `,
   },
+  {
+    version: 6,
+    name: "disputes_audits",
+    sql: `
+CREATE TABLE IF NOT EXISTS disputes (
+  id TEXT PRIMARY KEY,
+  mission_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  round INTEGER NOT NULL DEFAULT 0,
+  claim TEXT NOT NULL,
+  evidence_json TEXT,
+  ruling_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dispute_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dispute_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  text TEXT NOT NULL,
+  evidence_json TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (dispute_id) REFERENCES disputes(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS audits (
+  id TEXT PRIMARY KEY,
+  mission_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  reviewer_staff_id TEXT,
+  reviewer_session_id TEXT,
+  verdict_json TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lessons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mission_id TEXT,
+  task_id TEXT,
+  text TEXT NOT NULL,
+  tags_json TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_disputes_mission_task ON disputes(mission_id, task_id);
+CREATE INDEX IF NOT EXISTS idx_dispute_messages_dispute ON dispute_messages(dispute_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audits_mission_task ON audits(mission_id, task_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_mission ON lessons(mission_id, created_at);
+`,
+  },
 ];

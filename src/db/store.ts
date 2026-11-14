@@ -74,6 +74,50 @@ export type Task = {
   updatedAt: string;
 };
 
+export type Dispute = {
+  id: string;
+  missionID: string;
+  taskID: string;
+  status: string;
+  round: number;
+  claim: string;
+  evidence: unknown;
+  ruling: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DisputeMessage = {
+  id: number;
+  disputeID: string;
+  role: string;
+  text: string;
+  evidence: unknown;
+  createdAt: string;
+};
+
+export type Audit = {
+  id: string;
+  missionID: string;
+  taskID: string;
+  kind: string;
+  status: string;
+  reviewerStaffID: string | null;
+  reviewerSessionID: string | null;
+  verdict: unknown;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type Lesson = {
+  id: number;
+  missionID: string | null;
+  taskID: string | null;
+  text: string;
+  tags: string[];
+  createdAt: string;
+};
+
 export type LedgerInput = {
   missionID?: string | null;
   taskID?: string | null;
@@ -143,6 +187,50 @@ type TaskRow = {
   attempts: number;
   created_at: string;
   updated_at: string;
+};
+
+type DisputeRow = {
+  id: string;
+  mission_id: string;
+  task_id: string;
+  status: string;
+  round: number;
+  claim: string;
+  evidence_json: string | null;
+  ruling_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type DisputeMessageRow = {
+  id: number;
+  dispute_id: string;
+  role: string;
+  text: string;
+  evidence_json: string | null;
+  created_at: string;
+};
+
+type AuditRow = {
+  id: string;
+  mission_id: string;
+  task_id: string;
+  kind: string;
+  status: string;
+  reviewer_staff_id: string | null;
+  reviewer_session_id: string | null;
+  verdict_json: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+type LessonRow = {
+  id: number;
+  mission_id: string | null;
+  task_id: string | null;
+  text: string;
+  tags_json: string | null;
+  created_at: string;
 };
 
 function missionID(): string {
@@ -222,6 +310,58 @@ function mapTask(row: TaskRow): Task {
     attempts: row.attempts,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapDispute(row: DisputeRow): Dispute {
+  return {
+    id: row.id,
+    missionID: row.mission_id,
+    taskID: row.task_id,
+    status: row.status,
+    round: row.round,
+    claim: row.claim,
+    evidence: parseJSON<unknown>(row.evidence_json),
+    ruling: parseJSON<unknown>(row.ruling_json),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapDisputeMessage(row: DisputeMessageRow): DisputeMessage {
+  return {
+    id: row.id,
+    disputeID: row.dispute_id,
+    role: row.role,
+    text: row.text,
+    evidence: parseJSON<unknown>(row.evidence_json),
+    createdAt: row.created_at,
+  };
+}
+
+function mapAudit(row: AuditRow): Audit {
+  return {
+    id: row.id,
+    missionID: row.mission_id,
+    taskID: row.task_id,
+    kind: row.kind,
+    status: row.status,
+    reviewerStaffID: row.reviewer_staff_id,
+    reviewerSessionID: row.reviewer_session_id,
+    verdict: parseJSON<unknown>(row.verdict_json),
+    notes: row.notes,
+    createdAt: row.created_at,
+  };
+}
+
+function mapLesson(row: LessonRow): Lesson {
+  return {
+    id: row.id,
+    missionID: row.mission_id,
+    taskID: row.task_id,
+    text: row.text,
+    tags: parseJSON<string[]>(row.tags_json) ?? [],
+    createdAt: row.created_at,
   };
 }
 
@@ -1089,8 +1229,324 @@ export class SquadStore {
     };
   }
 
+  openDispute(
+    missionID: string,
+    taskID: string,
+    claim: string,
+    evidence?: unknown,
+  ): Dispute {
+    this.requireMission(missionID);
+    const task = this.requireTask(missionID, taskID);
+    if (!["returned", "in_review", "integrated"].includes(task.status)) {
+      throw new Error(`cannot open dispute in task status ${task.status}`);
+    }
+    if (!claim.trim()) throw new Error("dispute claim is required");
+    const existing = this.db
+      .query(
+        `SELECT * FROM disputes
+         WHERE mission_id = ? AND task_id = ? AND status = 'open'
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(missionID, taskID) as DisputeRow | undefined;
+    if (existing) return mapDispute(existing);
+
+    const id = `d_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+    const timestamp = now();
+    const create = this.db.transaction(() => {
+      this.db
+        .query(
+          `INSERT INTO disputes
+           (id, mission_id, task_id, status, round, claim, evidence_json, created_at, updated_at)
+           VALUES (?, ?, ?, 'open', 0, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          missionID,
+          taskID,
+          claim.trim(),
+          evidence === undefined ? null : JSON.stringify(evidence),
+          timestamp,
+          timestamp,
+        );
+      this.addEvent(missionID, taskID, "dispute.opened", { disputeID: id, claim: claim.trim() });
+    });
+    create();
+    return this.requireDispute(id);
+  }
+
+  getDispute(id: string): Dispute | undefined {
+    const row = this.db.query("SELECT * FROM disputes WHERE id = ?").get(id) as
+      | DisputeRow
+      | undefined;
+    return row ? mapDispute(row) : undefined;
+  }
+
+  requireDispute(id: string): Dispute {
+    const dispute = this.getDispute(id);
+    if (!dispute) throw new Error(`dispute not found: ${id}`);
+    return dispute;
+  }
+
+  listDisputes(missionID: string): Dispute[] {
+    const rows = this.db
+      .query("SELECT * FROM disputes WHERE mission_id = ? ORDER BY created_at DESC")
+      .all(missionID) as DisputeRow[];
+    return rows.map(mapDispute);
+  }
+
+  listDisputeMessages(disputeID: string): DisputeMessage[] {
+    const rows = this.db
+      .query("SELECT * FROM dispute_messages WHERE dispute_id = ? ORDER BY id ASC")
+      .all(disputeID) as DisputeMessageRow[];
+    return rows.map(mapDisputeMessage);
+  }
+
+  replyDispute(disputeID: string, role: string, text: string, evidence?: unknown): Dispute {
+    const dispute = this.requireDispute(disputeID);
+    if (dispute.status !== "open") throw new Error(`dispute is not open: ${dispute.status}`);
+    if (dispute.round >= 2) {
+      throw new Error("dispute round limit reached (2); use action=rule");
+    }
+    if (!text.trim()) throw new Error("dispute reply text is required");
+    const timestamp = now();
+    const reply = this.db.transaction(() => {
+      this.db
+        .query(
+          `INSERT INTO dispute_messages (dispute_id, role, text, evidence_json, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          disputeID,
+          role,
+          text.trim(),
+          evidence === undefined ? null : JSON.stringify(evidence),
+          timestamp,
+        );
+      this.db
+        .query("UPDATE disputes SET round = round + 1, updated_at = ? WHERE id = ?")
+        .run(timestamp, disputeID);
+      this.addEvent(
+        dispute.missionID,
+        dispute.taskID,
+        "dispute.reply",
+        { disputeID, role, round: dispute.round + 1 },
+      );
+    });
+    reply();
+    return this.requireDispute(disputeID);
+  }
+
+  saveRuling(disputeID: string, ruling: unknown): Dispute {
+    const dispute = this.requireDispute(disputeID);
+    if (dispute.status !== "open") throw new Error(`dispute is not open: ${dispute.status}`);
+    const winner = (ruling as { winner?: string } | null)?.winner;
+    if (!winner || !["worker", "reviewer", "split"].includes(winner)) {
+      throw new Error("ruling.winner must be worker, reviewer or split");
+    }
+    const task = this.requireTask(dispute.missionID, dispute.taskID);
+    const timestamp = now();
+
+    const resolve = this.db.transaction(() => {
+      this.db
+        .query(
+          `UPDATE disputes SET status = 'resolved', ruling_json = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(JSON.stringify(ruling), timestamp, disputeID);
+
+      if (winner === "worker") {
+        this.db
+          .query(
+            `UPDATE tasks SET status = 'submitted', updated_at = ?
+             WHERE mission_id = ? AND id = ?`,
+          )
+          .run(timestamp, dispute.missionID, dispute.taskID);
+        this.db
+          .query(
+            `UPDATE missions SET status = 'reviewing', updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(timestamp, dispute.missionID);
+        this.penalize(task.reviewerStaffID, -0.2, `lost arbitration ${disputeID}`);
+      } else {
+        this.db
+          .query(
+            `UPDATE tasks SET status = 'returned', updated_at = ?
+             WHERE mission_id = ? AND id = ?`,
+          )
+          .run(timestamp, dispute.missionID, dispute.taskID);
+        this.db
+          .query(
+            `UPDATE missions SET status = 'executing', updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(timestamp, dispute.missionID);
+        if (winner === "reviewer") {
+          this.penalize(task.staffID, -0.1, `lost arbitration ${disputeID}`);
+        }
+      }
+
+      this.addLesson(
+        dispute.missionID,
+        dispute.taskID,
+        `Arbitration ${disputeID}: ${String((ruling as { reasoning?: string }).reasoning ?? "")}`,
+        ["arbitration", winner],
+      );
+      this.addEvent(dispute.missionID, dispute.taskID, "dispute.resolved", {
+        disputeID,
+        winner,
+      });
+    });
+    resolve();
+    return this.requireDispute(disputeID);
+  }
+
+  addLesson(missionID: string | null, taskID: string | null, text: string, tags: string[] = []): void {
+    if (!text.trim()) return;
+    this.db
+      .query(
+        `INSERT INTO lessons (mission_id, task_id, text, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(missionID, taskID, text.trim(), JSON.stringify(tags), now());
+  }
+
+  listLessons(missionID?: string): Lesson[] {
+    const rows = missionID
+      ? (this.db
+          .query("SELECT * FROM lessons WHERE mission_id = ? ORDER BY id DESC")
+          .all(missionID) as LessonRow[])
+      : (this.db.query("SELECT * FROM lessons ORDER BY id DESC").all() as LessonRow[]);
+    return rows.map(mapLesson);
+  }
+
+  recordAudit(input: {
+    missionID: string;
+    taskID: string;
+    kind: string;
+    status: "pass" | "fail";
+    reviewerStaffID?: string | null;
+    reviewerSessionID?: string | null;
+    verdict?: unknown;
+    notes?: string;
+  }): Audit {
+    const task = this.requireTask(input.missionID, input.taskID);
+    const id = `a_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+    const timestamp = now();
+    const record = this.db.transaction(() => {
+      this.db
+        .query(
+          `INSERT INTO audits
+           (id, mission_id, task_id, kind, status, reviewer_staff_id, reviewer_session_id, verdict_json, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.missionID,
+          input.taskID,
+          input.kind,
+          input.status,
+          input.reviewerStaffID ?? null,
+          input.reviewerSessionID ?? null,
+          input.verdict === undefined ? null : JSON.stringify(input.verdict),
+          input.notes ?? null,
+          timestamp,
+        );
+
+      if (input.status === "fail") {
+        this.db
+          .query(
+            `UPDATE tasks SET status = 'returned', updated_at = ?
+             WHERE mission_id = ? AND id = ?`,
+          )
+          .run(timestamp, input.missionID, input.taskID);
+        this.db
+          .query(
+            `UPDATE missions SET status = 'executing', updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(timestamp, input.missionID);
+        this.penalize(task.reviewerStaffID, -0.3, `false pass audit ${id}`);
+        this.addLesson(
+          input.missionID,
+          input.taskID,
+          `False pass audit ${id}: ${input.notes ?? "second review failed"}`,
+          ["audit", "false_pass"],
+        );
+        this.addEvent(input.missionID, input.taskID, "audit.false_pass", { auditID: id });
+      } else {
+        this.addEvent(input.missionID, input.taskID, "audit.passed", { auditID: id });
+      }
+    });
+    record();
+    return this.requireAudit(id);
+  }
+
+  getAudit(id: string): Audit | undefined {
+    const row = this.db.query("SELECT * FROM audits WHERE id = ?").get(id) as AuditRow | undefined;
+    return row ? mapAudit(row) : undefined;
+  }
+
+  requireAudit(id: string): Audit {
+    const audit = this.getAudit(id);
+    if (!audit) throw new Error(`audit not found: ${id}`);
+    return audit;
+  }
+
+  listAudits(missionID: string): Audit[] {
+    const rows = this.db
+      .query("SELECT * FROM audits WHERE mission_id = ? ORDER BY created_at DESC")
+      .all(missionID) as AuditRow[];
+    return rows.map(mapAudit);
+  }
+
+  hasAudit(missionID: string, taskID: string): boolean {
+    const row = this.db
+      .query("SELECT COUNT(*) AS count FROM audits WHERE mission_id = ? AND task_id = ?")
+      .get(missionID, taskID) as { count: number };
+    return row.count > 0;
+  }
+
+  private penalize(staffID: string | null, delta: number, note: string): void {
+    if (!staffID) return;
+    const staff = this.getStaff(staffID);
+    if (!staff || staff.status !== "active") return;
+    const nextScore = Math.max(0, Math.min(1, staff.score + delta));
+    const timestamp = now();
+    this.db
+      .query("UPDATE staff SET score = ?, updated_at = ? WHERE id = ?")
+      .run(nextScore, timestamp, staffID);
+    this.db
+      .query(
+        `INSERT INTO appraisals (staff_id, delta, note, created_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(staffID, delta, note, timestamp);
+  }
+
   countMissions(): number {
     const row = this.db.query("SELECT COUNT(*) AS count FROM missions").get() as {
+      count: number;
+    };
+    return row.count;
+  }
+
+  countDisputes(): number {
+    const row = this.db.query("SELECT COUNT(*) AS count FROM disputes").get() as {
+      count: number;
+    };
+    return row.count;
+  }
+
+  countAudits(): number {
+    const row = this.db.query("SELECT COUNT(*) AS count FROM audits").get() as {
+      count: number;
+    };
+    return row.count;
+  }
+
+  countLessons(): number {
+    const row = this.db.query("SELECT COUNT(*) AS count FROM lessons").get() as {
       count: number;
     };
     return row.count;

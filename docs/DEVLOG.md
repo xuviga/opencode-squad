@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 happy path ✅**; TUI, M5+ впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 happy path ✅ · M5 🟡**; TUI, M5 finish впереди
 
 ## Как ведётся журнал
 
@@ -22,7 +22,7 @@
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
 | M4 Параллель и изоляция | 🟡 happy path | worktree/DAG/finalize/radar работают; conflict merge и parallel stress не тестировались |
-| M5 Споры, арбитр, аудитор | ⚪ не начат | — |
+| M5 Споры, арбитр, аудитор | 🟡 в работе | disputes/arbiter/lessons + second-review/false-pass; live audit pass; dispute rule live не тестирован; process auditor нет |
 | M6 Универсальные классы | ⚪ не начат | — |
 | M7 Закалка | ⚪ не начат | — |
 
@@ -130,6 +130,23 @@
 - `session.location` может показывать project root, а не worktree.
 - Решение: для worktree читать `git diff HEAD^`/`git diff`/`git status` через `child_process`; для main — `ctx.vcs.diff`. Reviewer видит committed changes, а не пустой working tree.
 
+### 2026-11-14 · Сессия 6 — M5: disputes, arbiter, audits, false-pass
+
+**Сделано**
+
+- [x] Migration 006: `disputes`, `dispute_messages`, `audits`, `lessons`.
+- [x] `src/ruling.ts`: Ruling winner/reasoning/actions + parser.
+- [x] `.opencode/agents/squad-arbiter.md`: arbiter без инструментов, steps 2, pro·max.
+- [x] `squad_dispute`: open/reply/rule/list; до 2 раундов; арбитр читает claim, messages, brief, report, verdict, diff.
+- [x] `squad_audit`: selective second review; задача должна быть integrated; false pass → task returned, reviewer −0.3, lesson.
+- [x] `squad_report`: disputes, audits, lessons.
+- [x] 34 unit-теста (ruling, dispute round limit, false pass).
+
+**M5 live result**
+
+- `squad_audit` на `m_e872b7f0/t_001`: второй ревьюер `s_18904c07` (G3) получил worktree-diff, вернул `pass/low`; audit `a_ae53e211`; cost `$0.00154968`; mission осталась `done`.
+- Disputes live не запускались (unit: open → 2 replies → round limit → ruling worker → task submitted, reviewer −0.2, lesson).
+
 **Структура**
 
 ```text
@@ -140,15 +157,16 @@ src/
   plan.ts               MissionPlan + валидация
   report.ts             TaskReport + парсер
   verdict.ts            Verdict + pass/fail правила
+  ruling.ts             Ruling арбитра + parser
   json.ts               последний JSON-объект
   personas.ts           персоны, грейды, agent mapping, permissions
   runtime/probe.ts      M0.0 probe
   runtime/hire.ts       общий hire helper + worktree
   runtime/messages.ts   assistant text + last assistant
   runtime/diff.ts       per-task diff: git-worktree / vcs
-  db/schema.ts          migrations 001–005
+  db/schema.ts          migrations 001–006
   db/index.ts           openSquadDb + WAL + миграции
-  db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist
+  db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist/disputes/audits/lessons
   tools/status.ts       squad_status
   tools/probe.ts        squad_probe
   tools/mission.ts      squad_mission
@@ -168,8 +186,11 @@ src/
   tools/career.ts       squad_career
   tools/tasks.ts        squad_tasks
   tools/finalize.ts     squad_finalize
+  tools/dispute.ts      squad_dispute
+  tools/audit.ts        squad_audit
 .opencode/agents/
   squad-reviewer.md     blind reviewer, no tools, steps 2
+  squad-arbiter.md      arbiter, no tools, steps 2
 dev/
   opencode.jsonc        локальная загрузка плагина
   M1_PROMPT.md          M1 smoke
@@ -180,6 +201,7 @@ dev/
   M4_CONTINUE.md        M4 diff continuation
   M4_DIAG.md            M4 diff diagnostic
   M4_FINAL.md           M4 final gate
+  M5_PROMPT.md          M5 audit smoke
   one-line-proof.txt    artifact M2
 scripts/
   probe-client.ts
@@ -202,13 +224,14 @@ tests/
 | Команда/сценарий | Результат |
 |---|---|
 | `bun run typecheck` | ✅ без ошибок |
-| `bun test` | ✅ 28 pass, 0 fail, 76 expect |
+| `bun test` | ✅ 34 pass, 0 fail, 92 expect |
 | `bun run probe` | ✅ `SQUAD_PROBE_OK`, cost `$0.000251` |
 | `bun run probe:interrupt` | ✅ `interrupted:true` |
 | M1 live | ✅ writer report `done`, ledger `$0.0023631` |
 | M2 live | ✅ fail → rework → pass → integrated → mission `done` |
 | M3 live | ✅ appraise/fire/blacklist; повторный hire отклонён |
 | M4 live | ✅ worktree `squad-implementer-145026`, git-diff `dev/m4-proof.txt`, pass, mission `done`, budget `$0.010374` |
+| M5 audit live | ✅ second review `pass/low`, audit `a_ae53e211`, cost `$0.00154968` |
 
 **Найдено и исправлено**
 
@@ -220,21 +243,25 @@ tests/
 6. `squad_status` слишком многословен; оставлены counts + внешние плагины.
 7. `interrupt` после idle — no-op; отдельный running-interrupt probe проходит.
 8. `ctx.vcs.diff({ location })` игнорирует location, `ctx.session.diff` недоступен; worktree-diff читается через git (`HEAD^` + working), reviewer видит committed changes.
+9. Second review использует того же no-tools reviewer и worktree-diff; false pass возвращает task и штрафует первого ревизора.
+10. Dispute round limit 2 enforced; arbiter получает только claim/messages/brief/report/verdict/diff.
 
 **Открытые вопросы**
 
 - TUI-панель M0 ещё не начата.
-- Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником (unit-тест replacement есть).
+- Dispute `rule` live-тест не проведён (unit-тест покрывает).
+- Process auditor (аудит процесса босса) не реализован; `squad_audit` пока только task second review.
+- 10% sampling реализован как «первая unaudited integrated task», не рандомизирован.
+- Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
 - M4 conflict merge не реализован: `squad_finalize` — гейт статуса, а не слияние worktree в main.
-- Параллельный найм технически возможен, но stress-тест на 3+ одновременных задачах не проводился.
-- Worktree на detached HEAD: коммит worker'а не привязан к ветке; для merge нужен cherry-pick/branch.
-- Re-queue/rework не ограничивает число ревизий на уровне mission (только attempts задачи).
-- `.squad/squad.db` project-local; для глобального штата нужен отдельный data-dir.
-- Git: initial `5cec9b7`, M1 `618aab7`, M2/M3 `e5d654c`; M4 — следующий коммит.
+- Параллельный найм технически возможен, но stress-тест 3+ задач не проводился.
+- Worktree на detached HEAD; для merge нужен cherry-pick/branch.
+- `.squad/squad.db` project-local.
+- Git: `160f210` (M4); M5 — следующий коммит.
 
 **Дальше**
 
-1. **M5** — dispute/arbiter/auditor, выборочные вторые ревизии.
+1. **M5 finish** — live dispute rule, process auditor, рандомный 10% sample.
 2. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
 3. M4 merge: cherry-pick/branch worktree → main, conflict detection.
 4. Stress-тест 3 параллельных задач и лимит параллельного найма.

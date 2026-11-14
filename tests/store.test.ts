@@ -268,4 +268,98 @@ describe("SquadStore", () => {
     expect(budget.anomaly).toBe(true);
     expect(budget.warnings).toContain("more than 3x expected");
   });
+
+  test("opens a dispute, limits rounds, and applies an arbitration ruling", () => {
+    const mission = store.createMission("Dispute mission");
+    store.submitPlan(mission.id, plan);
+    store.approvePlan(mission.id);
+    const worker = hire();
+    store.assignTask(mission.id, "t_001", worker.id, { goal: "Fix" });
+    store.markTaskRunning(mission.id, "t_001");
+    store.saveRawReport(mission.id, "t_001", '{"status":"done"}');
+    store.completeTask(mission.id, "t_001", { status: "done" });
+
+    const reviewer = store.hireStaff({
+      persona: "reviewer",
+      grade: "G3",
+      agent: "squad-reviewer",
+      provider: "deepseek",
+      model: "deepseek-v4-pro",
+      variant: "high",
+      sessionID: "ses_dispute_review",
+    });
+    store.appraiseStaff(reviewer.id, 0.5, "baseline");
+    store.assignReview(mission.id, "t_001", reviewer.id, "ses_dispute_review");
+    store.saveVerdict(mission.id, "t_001", {
+      verdict: "fail",
+      severity: "high",
+      findings: [{ id: "F1", claim: "missing", evidence: "report:1", required_fix: "add" }],
+      checked: ["diff", "acceptance"],
+    });
+
+    const dispute = store.openDispute(mission.id, "t_001", "reviewer missed the evidence");
+    store.replyDispute(dispute.id, "worker", "The diff contains the deliverable.");
+    store.replyDispute(dispute.id, "reviewer", "The acceptance criterion is still unmet.");
+    expect(() => store.replyDispute(dispute.id, "worker", "third")).toThrow("round limit");
+
+    store.saveRuling(dispute.id, {
+      winner: "worker",
+      reasoning: "The worker's evidence is sufficient for the stated acceptance.",
+      actions: ["re-review"],
+    });
+
+    expect(store.requireDispute(dispute.id).status).toBe("resolved");
+    expect(store.requireTask(mission.id, "t_001").status).toBe("submitted");
+    expect(store.requireStaff(reviewer.id).score).toBeCloseTo(0.3);
+    expect(store.listLessons(mission.id)).toHaveLength(1);
+  });
+
+  test("a failed second review marks a false pass and penalizes the first reviewer", () => {
+    const mission = store.createMission("Audit mission");
+    store.submitPlan(mission.id, plan);
+    store.approvePlan(mission.id);
+    const worker = hire();
+    store.assignTask(mission.id, "t_001", worker.id, { goal: "Fix" });
+    store.markTaskRunning(mission.id, "t_001");
+    store.saveRawReport(mission.id, "t_001", '{"status":"done"}');
+    store.completeTask(mission.id, "t_001", { status: "done" });
+
+    const reviewer = store.hireStaff({
+      persona: "reviewer",
+      grade: "G3",
+      agent: "squad-reviewer",
+      provider: "deepseek",
+      model: "deepseek-v4-pro",
+      variant: "high",
+      sessionID: "ses_audit_review",
+    });
+    store.appraiseStaff(reviewer.id, 0.5, "baseline");
+    store.assignReview(mission.id, "t_001", reviewer.id, "ses_audit_review");
+    store.saveVerdict(mission.id, "t_001", {
+      verdict: "pass",
+      severity: "low",
+      findings: [],
+      checked: ["diff", "tests", "acceptance"],
+    });
+    expect(store.requireTask(mission.id, "t_001").status).toBe("integrated");
+
+    const audit = store.recordAudit({
+      missionID: mission.id,
+      taskID: "t_001",
+      kind: "second_review",
+      status: "fail",
+      reviewerStaffID: "s_second",
+      verdict: { verdict: "fail", findings: [{ id: "F1" }] },
+      notes: "deliverable missing",
+    });
+
+    expect(audit.status).toBe("fail");
+    expect(store.requireTask(mission.id, "t_001").status).toBe("returned");
+    expect(store.requireMission(mission.id).status).toBe("executing");
+    expect(store.requireStaff(reviewer.id).score).toBeCloseTo(0.2);
+    expect(store.hasAudit(mission.id, "t_001")).toBe(true);
+    expect(store.listLessons(mission.id).some((lesson) => lesson.tags.includes("false_pass"))).toBe(
+      true,
+    );
+  });
 });

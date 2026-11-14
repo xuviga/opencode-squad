@@ -20,6 +20,7 @@ export const PERSONAS: Record<string, PersonaSpec> = {
   critic: { defaultGrade: "G4", agent: "squad-reviewer", access: "read-only" },
   integrator: { defaultGrade: "G4", agent: "build", access: "shell" },
   auditor: { defaultGrade: "G2", agent: "explore", access: "read-only" },
+  arbiter: { defaultGrade: "G4", agent: "squad-arbiter", access: "read-only" },
   scribe: { defaultGrade: "G1", agent: "build", access: "write" },
 };
 
@@ -64,6 +65,13 @@ export function gradeOrDefault(persona: string, grade?: string): PlanGrade {
     return grade as PlanGrade;
   }
   return resolvePersona(persona).defaultGrade;
+}
+
+export function nextGrade(grade: string): PlanGrade {
+  const order: PlanGrade[] = ["G0", "G1", "G2", "G3", "G4"];
+  const index = order.indexOf(grade as PlanGrade);
+  if (index < 0) throw new Error(`unknown grade: ${grade}`);
+  return order[Math.min(index + 1, order.length - 1)]!;
 }
 
 export type GradeConfig = Record<Grade, { providerID: string; modelID: string; variant: string }>;

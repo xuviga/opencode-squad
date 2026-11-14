@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
-import type { PlanGrade } from "../plan";
+import { nextGrade } from "../personas";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { fail, ok } from "./result";
@@ -9,14 +9,6 @@ type ReviewInput = {
   mission_id?: string;
   task_id?: string;
 };
-
-const GRADE_ORDER: PlanGrade[] = ["G0", "G1", "G2", "G3", "G4"];
-
-function nextGrade(grade: string): PlanGrade {
-  const index = GRADE_ORDER.indexOf(grade as PlanGrade);
-  if (index < 0) throw new Error(`unknown task grade: ${grade}`);
-  return GRADE_ORDER[Math.min(index + 1, GRADE_ORDER.length - 1)]!;
-}
 
 const VERDICT_SCHEMA = {
   verdict: "pass | fail",

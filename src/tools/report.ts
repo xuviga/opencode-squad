@@ -40,6 +40,12 @@ export async function registerReportTool(ctx: Plugin.Context, store: SquadStore)
           const budget = store.budgetSummary(args.mission_id);
           const staff = store.listStaff(100);
           const events = store.listEvents(args.mission_id, 50);
+          const disputes = store.listDisputes(args.mission_id).map((dispute) => ({
+            ...dispute,
+            messages: store.listDisputeMessages(dispute.id),
+          }));
+          const audits = store.listAudits(args.mission_id);
+          const lessons = store.listLessons(args.mission_id);
 
           const taskLines = tasks.map((task) => {
             const report = task.report as { status?: string; summary?: string } | undefined;
@@ -78,6 +84,27 @@ export async function registerReportTool(ctx: Plugin.Context, store: SquadStore)
               (event) =>
                 `- ${event.created_at} · ${event.type}${event.task_id ? ` · ${event.task_id}` : ""}`,
             ),
+            "",
+            "## Disputes",
+            ...(disputes.length
+              ? disputes.map(
+                  (dispute) =>
+                    `- ${dispute.id} · ${dispute.status} · ${dispute.taskID} · round ${dispute.round} · ${dispute.claim}`,
+                )
+              : ["- none"]),
+            "",
+            "## Audits",
+            ...(audits.length
+              ? audits.map(
+                  (audit) =>
+                    `- ${audit.id} · ${audit.kind} · ${audit.status} · ${audit.taskID}`,
+                )
+              : ["- none"]),
+            "",
+            "## Lessons",
+            ...(lessons.length
+              ? lessons.map((lesson) => `- ${lesson.text}`)
+              : ["- none"]),
           ].join("\n");
 
           return ok({
@@ -87,6 +114,9 @@ export async function registerReportTool(ctx: Plugin.Context, store: SquadStore)
             staff,
             budget,
             events,
+            disputes,
+            audits,
+            lessons,
             markdown,
           });
         } catch (error) {

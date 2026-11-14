@@ -3,9 +3,11 @@ import { openSquadDb } from "./db/index";
 import { SquadStore } from "./db/store";
 import { registerAppraiseTool } from "./tools/appraise";
 import { registerAssignTool } from "./tools/assign";
+import { registerAuditTool } from "./tools/audit";
 import { registerBudgetTool } from "./tools/budget";
 import { registerCareerTool } from "./tools/career";
 import { registerCheckTool } from "./tools/check";
+import { registerDisputeTool } from "./tools/dispute";
 import { registerFireTool } from "./tools/fire";
 import { registerFinalizeTool } from "./tools/finalize";
 import { registerHireTool } from "./tools/hire";
@@ -48,6 +50,8 @@ export default Plugin.define({
       registerCareerTool(ctx, store),
       registerTasksTool(ctx, store),
       registerFinalizeTool(ctx, store),
+      registerDisputeTool(ctx, store),
+      registerAuditTool(ctx, store),
     ]);
 
     console.log(
