@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ · integration gate ✅**; TUI live check и M7 впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ · integration gate ✅ · M7 hardening 🟡**; TUI live check и release впереди
 
 ## Как ведётся журнал
 
@@ -24,7 +24,7 @@
 | M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge; 3 параллельных задачи live `m_a5669cde`; conflict strategy `abort/theirs` |
 | M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
 | M6 Универсальные классы | ✅ | 10 шаблонов планов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research mission `m_e6049e51` |
-| M7 Закалка | ⚪ не начат | — |
+| M7 Закалка | 🟡 начат | cancel, API drift test, README, chaos/contracts; release впереди |
 
 ## Журнал
 
@@ -292,6 +292,7 @@ tests/
   integrate.test.ts
   wait.test.ts
   tui.test.ts
+  api-drift.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -376,6 +377,7 @@ tests/
 | Timeout branch unit | ✅ `tests/wait.test.ts`: timedOut, task failed, ledger $0.01, interrupt вызван |
 | TUI wiring | ✅ `/squad` команда, `session.panel` claim, `panel.open("squad.panel")` |
 | Cancel live | ✅ `m_680e636a`, `m_5e2b1f16`, `m_244bbc9f` → `aborted`, 5 tasks cancelled |
+| API drift contract | ✅ pins `2.3.0`; setup регистрирует все 26 инструментов |
 
 **Найдено**
 
