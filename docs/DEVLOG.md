@@ -204,7 +204,7 @@
 ```text
 src/
   index.ts              Plugin.define + 26 tools + RPC
-  version.ts            0.5.1
+  version.ts            0.6.0
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
   classes.ts            шаблоны классов + buildPlanTemplate
@@ -223,6 +223,9 @@ src/
   runtime/diff.ts       per-task diff: git-worktree / vcs
   runtime/integrate.ts  cherry-pick worktree → main
   runtime/commit.ts     авто-коммит worktree после wait
+  runtime/preview.ts    SVG → PNG через resvg
+  runtime/images.ts     сбор/preview картинок для ревизии
+  runtime/paths.ts      безопасный resolve путей
   db/schema.ts          migrations 001–008
   db/index.ts           openSquadDb + WAL + миграции
   db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist/disputes/audits/lessons
@@ -233,6 +236,8 @@ src/
   tools/template.ts     squad_template
   tools/capabilities.ts squad_capabilities
   tools/image.ts        squad_image
+  tools/preview.ts      squad_preview
+  tools/look.ts         squad_look
   tools/cancel.ts       squad_cancel
   tools/budget.ts       squad_budget
   tools/hire.ts         squad_hire
@@ -278,6 +283,7 @@ dev/
   m6-image-prompt.md    M6 image smoke
   design/concept.md     design live: concept
   design/squad-poster.svg design live: editable poster
+  design/squad-poster.png design live: raster preview
   one-line-proof.txt    artifact M2
   m6-proof.txt          artifact M6 (merged to main)
 scripts/
@@ -298,6 +304,7 @@ tests/
   api-drift.test.ts
   commit.test.ts
   diff.test.ts
+  preview.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -354,7 +361,10 @@ tests/
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
 - [x] `squad_integrate` strategy: `abort` (по умолчанию) и `theirs` (авто-разрешение конфликта в пользу воркера), результат пишет strategy.
 - [x] `squad_cancel`: аварийное завершение миссии с причиной; non-integrated задачи → `cancelled`, merged работа сохраняется.
-- [x] Версия `0.5.1`, 26 инструментов, 57 тестов.
+- [x] `squad_preview`: локальный SVG→PNG через `@resvg/resvg-js` (без image-модели).
+- [x] `squad_look`: image attachment в дочернюю сессию DeepSeek; ответ + cost в ledger.
+- [x] `squad_review`/`squad_audit` автоматически прикрепляют PNG из отчёта или рендерят preview SVG.
+- [x] Версия `0.6.0`, 28 инструментов, 59 тестов.
 
 **Проверки**
 
@@ -382,7 +392,7 @@ tests/
 | Timeout branch unit | ✅ `tests/wait.test.ts`: timedOut, task failed, ledger $0.01, interrupt вызван |
 | TUI wiring | ✅ `/squad` команда, `session.panel` claim, `panel.open("squad.panel")` |
 | Cancel live | ✅ `m_680e636a`, `m_5e2b1f16`, `m_244bbc9f` → `aborted`, 5 tasks cancelled |
-| API drift contract | ✅ pins `2.3.0`; setup регистрирует все 26 инструментов |
+| API drift contract | ✅ pins `2.3.0`; setup регистрирует все 28 инструментов |
 
 **Найдено**
 
@@ -405,7 +415,7 @@ tests/
 - [x] `src/runtime/commit.ts`: `squad_wait` авто-коммитит грязный worktree после отчёта воркера; событие `worktree.committed`; при ошибке task → `failed` (fail-closed).
 - [x] `taskDiff` отдаёт `worktree.head/subject/dirty`; review и audit видят коммит и не верят устаревшему report.
 - [x] Уточнение external assets: локальные `font-family` — не external; external = remote URL, `@font-face`, `<image>`, `data:` URI, embedded binaries.
-- [x] `tests/commit.test.ts`, `tests/diff.test.ts`; 57 тестов.
+- [x] `tests/commit.test.ts`, `tests/diff.test.ts`, `tests/preview.test.ts`; 59 тестов.
 
 **Проверки**
 
@@ -416,10 +426,13 @@ tests/
 | Reviewer commit metadata | ✅ arbiter цитирует `ff3e6f4`, `dirty:false` и отменяет ложный F1 |
 | Auto-commit designer | ✅ designer без shell → `ff3e6f4`; produce integrated `b060bd5` |
 | SVG structure | ✅ viewBox `0 0 1200 1600`, 42 text, 0 image, 0 path, нет remote/@font-face/data: |
+| Preview live | ✅ `squad.preview` → 1200×1600 PNG, 112 519 bytes |
+| Vision live | ✅ `squad.look` (`deepseek-flash#high`): SQUAD, 4 ledger rows, footer; $0.002575 |
+| Review image attach | ✅ `taskImages` авто-рендерит preview для design task (unit) |
 
 **Найдено**
 
-1. Official DeepSeek не предоставляет image-модель; для design-класса правильный путь — editable SVG (vector), а не raster image API.
+1. Official DeepSeek не предоставляет image-модель для генерации, но **принимает image attachments**: `deepseek-flash` точно прочитал PNG постера (SQUAD, 4 ledger rows, footer). Raster preview делается локально через `@resvg/resvg-js`, image-key не нужен.
 2. Writer/designer с `access=write` не имеет shell/git: без авто-коммита работа остаётся в worktree и не интегрируется. Исправлено.
 3. Ревизор видел устаревший worker report («uncommitted») и фейлил, хотя worktree уже был закоммичен. Исправлено метаданными коммита + явным правилом.
 4. Ревизор трактовал имена локальных шрифтов как external assets. Исправлено правилом; arbiter подтвердил.
@@ -427,7 +440,7 @@ tests/
 
 **Открытые вопросы**
 
-- Raster/PNG preview для design не сгенерирован: DeepSeek не умеет image, а OpenCode image-key просрочен. SVG — финальный векторный артефакт.
+- Генерация raster с нуля (`squad_image`) по-прежнему требует image-модель; preview существующего SVG и vision-анализ работают без неё.
 - TUI wiring покрыт unit-тестом, но живой визуальный прогон под TTY всё ещё не выполнен.
 - `session.wait` не ждёт `session.shell`; timeout-ветка покрыта fake-session тестом.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
@@ -439,4 +452,4 @@ tests/
 1. M7: оставшиеся chaos-сценарии и release.
 2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
 3. Raster preview дизайна — при валидном image-key или через CorelDRAW/poster-compiler.
-4. Тег `v0.5.1` и финальный отчёт.
+4. Тег `v0.6.0` и финальный отчёт.

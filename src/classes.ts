@@ -119,8 +119,8 @@ export const CLASS_TEMPLATES: Record<Exclude<TaskClass, "mixed">, ClassTemplate>
   design: {
     class: "design",
     label: "Design",
-    summary: "Explore distinct directions, then produce the chosen artifact and its preview.",
-    capabilities: ["tool:squad.image"],
+    summary: "Explore distinct directions, then produce the chosen artifact and its visual preview.",
+    capabilities: ["tool:squad.preview"],
     steps: [
       {
         suffix: "concept",

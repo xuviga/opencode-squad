@@ -2,7 +2,7 @@
 
 Мульти-агентный оркестратор для **OpenCode 2.3.0**: босс планирует миссию, нанимает сотрудников, проводит слепую ревизию, разрешает споры и сливает работу в main через изолированные worktree.
 
-Текущая версия: **0.5.1** · 26 инструментов · 57 тестов.
+Текущая версия: **0.6.0** · 28 инструментов · 59 тестов.
 
 ## Что внутри
 
@@ -15,7 +15,8 @@
 - **TUI**: команда `/squad` и панель `session.panel` с approve/reject, статусом миссии, штатом и расходом.
 - **Универсальные классы**: `code`, `research`, `writing`, `design`, `data`, `ops`, `review`, `planning`, `creative`, `mixed` через `squad_template`.
 - **Capabilities**: `skill:<id>`, `mcp:<server>`, `tool:<name>`; `squad_capabilities` проверяет доступность, `squad_assign` прикрепляет скиллы и передаёт guidance.
-- **Картинки**: `squad_image` через `experimental.generate.image`, файлы в `.squad/artifacts`, cost в ledger.
+- **Картинки**: `squad_image` генерирует raster через `experimental.generate.image`; `squad_preview` рендерит SVG в PNG; `squad_look` отправляет изображение DeepSeek и возвращает визуальный ответ.
+- **Визуальная ревизия**: `squad_review` и `squad_audit` автоматически прикрепляют PNG из отчёта или рендерят preview SVG, чтобы слепой ревизор видел дизайн.
 
 ## Установка
 
@@ -60,6 +61,7 @@ squad_finalize { mission_id }
 - Публикация `pass` возможна только от слепого ревизора без инструментов.
 - `squad_finalize` требует: все задачи `integrated`, ≥ `max(1, ceil(10% задач))` вторых ревизий, все worktree-задачи слиты.
 - `squad_wait` автоматически коммитит грязный worktree после отчёта воркера, поэтому writer/designer без shell всё равно интегрируются; при ошибке коммита задача падает fail-closed.
+- DeepSeek Flash принимает image attachments: `squad_look` и ревизоры видят PNG, а `squad_preview` даёт raster preview из SVG без image-модели.
 - `squad_integrate` отказывается работать на грязном main; при конфликте `abort` оставляет main чистым, `theirs` разрешает конфликт в пользу воркера и фиксирует strategy.
 - Ревизор для code-like классов обязан проверить `diff+tests`; для research/writing/design — `acceptance+evidence`.
 - Увольнение и понижение требуют записанного основания.
@@ -68,7 +70,7 @@ squad_finalize { mission_id }
 
 ```text
 src/
-  index.ts          Plugin.define + 26 tools + RPC
+  index.ts          Plugin.define + 28 tools + RPC
   plan.ts           MissionPlan + валидация
   classes.ts        шаблоны классов
   capabilities.ts   резолв skill/mcp/tool
@@ -76,7 +78,7 @@ src/
   tui.tsx           TUI plugin /squad
   db/               SQLite, migrations 001–008, store
   runtime/          hire, diff, integrate, probe, messages
-  tools/            26 инструментов
+  tools/            28 инструментов
 .opencode/agents/   squad-reviewer, squad-arbiter, squad-auditor (no tools)
 tests/              unit/integration/contract
 docs/PLAN.md        архитектура и этапы
@@ -94,7 +96,7 @@ bun test
 
 ## Ограничения
 
-- `squad_image` требует валидный ключ провайдера image-модели; авто-выбор image-модели зависит от `ctx.model.list()`. Official DeepSeek image-моделей не предоставляет, поэтому design-класс проверен на editable SVG (без raster API).
+- `squad_image` (генерация raster с нуля) требует image-модель; raster preview существующего SVG делается локально через `squad_preview`, а DeepSeek смотрит PNG через `squad_look`.
 - Живой визуальный TUI-прогон под TTY не автоматизирован; wiring покрыт unit-тестом.
 - `session.wait` ждёт model work, но не `session.shell`; timeout-ветка покрыта unit-тестом с fake session.
 - `.squad/squad.db` хранится в проекте; для нескольких проектов — своя БД на проект.

@@ -16,8 +16,10 @@ import { registerFinalizeTool } from "./tools/finalize";
 import { registerHireTool } from "./tools/hire";
 import { registerImageTool } from "./tools/image";
 import { registerIntegrateTool } from "./tools/integrate";
+import { registerLookTool } from "./tools/look";
 import { registerMissionTool } from "./tools/mission";
 import { registerPlanTool } from "./tools/plan";
+import { registerPreviewTool } from "./tools/preview";
 import { registerProbeTool } from "./tools/probe";
 import { registerReportTool } from "./tools/report";
 import { registerReviewTool } from "./tools/review";
@@ -65,6 +67,8 @@ export default Plugin.define({
       registerImageTool(ctx, store),
       registerCapabilitiesTool(ctx),
       registerCancelTool(ctx, store),
+      registerPreviewTool(ctx),
+      registerLookTool(ctx, store),
     ]);
 
     let rpcRegistration:

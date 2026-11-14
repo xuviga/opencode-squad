@@ -11,6 +11,8 @@ const EXPECTED_TOOLS = [
   "squad.template",
   "squad.capabilities",
   "squad.image",
+  "squad.preview",
+  "squad.look",
   "squad.cancel",
   "squad.budget",
   "squad.hire",

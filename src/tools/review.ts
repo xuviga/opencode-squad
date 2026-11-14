@@ -3,6 +3,7 @@ import type { SquadStore } from "../db/store";
 import { nextGrade } from "../personas";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
+import { taskImages } from "../runtime/images";
 import { requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
@@ -93,6 +94,7 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             diff = { error: error instanceof Error ? error.message : String(error) };
           }
           const diffText = JSON.stringify(diff, null, 2).slice(0, 24_000);
+          const images = taskImages(ctx, store, task, diff);
           const worktree = (
             diff && typeof diff === "object" ? (diff as {
               worktree?: { head?: string; subject?: string; dirty?: boolean };
@@ -108,6 +110,11 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
             "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
             "External assets means remote URLs, @font-face rules, <image>, data: URIs or embedded binaries; font-family names for locally installed fonts are allowed.",
+            ...(images.length > 0
+              ? [
+                  `Attached images: ${images.map((image) => image.name).join(", ")}. You can see them: judge visual quality, legibility and whether the artwork matches the brief. Do not reject an image merely because it is attached instead of embedded in the diff.`,
+                ]
+              : []),
             ...(worktree?.head
               ? [
                   `Worktree commit: ${worktree.head} (${worktree.subject ?? "no subject"}); working tree: ${worktree.dirty ? "dirty" : "clean"}. The orchestrator auto-commits the worktree after the worker report, so the report may predate this commit; judge commit claims by this metadata, not by the report.`,
@@ -136,6 +143,9 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
               sessionID: reviewer.sessionID,
               text: prompt,
               delivery: "queue",
+              ...(images.length > 0
+                ? { files: images.map(({ uri, name }) => ({ uri, name })) }
+                : {}),
             });
           } catch (error) {
             store.resetReview(args.mission_id, args.task_id, "review prompt admission failed");

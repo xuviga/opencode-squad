@@ -1,6 +1,6 @@
 {
   "name": "opencode-squad",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "SQUAD — multi-agent orchestrator plugin for OpenCode 2.3.0",
@@ -24,7 +24,8 @@
     "inspect": "bun run scripts/inspect.ts"
   },
   "dependencies": {
-    "@opencode/plugin": "2.3.0"
+    "@opencode/plugin": "2.3.0",
+    "@resvg/resvg-js": "^2.6.2"
   },
   "peerDependencies": {
     "@opentui/core": "^0.8.4",

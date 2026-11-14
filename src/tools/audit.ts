@@ -4,6 +4,7 @@ import { nextGrade } from "../personas";
 import { parseProcessAuditText } from "../process-audit";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
+import { taskImages } from "../runtime/images";
 import { extractLastAssistantText } from "../runtime/messages";
 import { parseVerdictText, requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
@@ -59,6 +60,8 @@ async function runTaskAudit(
     diff = { error: error instanceof Error ? error.message : String(error) };
   }
 
+  const images = taskImages(ctx, store, task, diff);
+
   const prompt = [
     `You are SQUAD second reviewer at grade ${reviewerGrade}.`,
     "The first reviewer passed this task. Verify it independently and adversarially.",
@@ -67,6 +70,11 @@ async function runTaskAudit(
     `This task is class "${task.class}". Required checks for a pass: ${requiredChecks(task.class).join(", ")}.`,
     "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",
     "External assets means remote URLs, @font-face rules, <image>, data: URIs or embedded binaries; font-family names for locally installed fonts are allowed.",
+    ...(images.length > 0
+      ? [
+          `Attached images: ${images.map((image) => image.name).join(", ")}. You can see them: judge visual quality, legibility and whether the artwork matches the brief.`,
+        ]
+      : []),
     ...(diff &&
     typeof diff === "object" &&
     (diff as { worktree?: { head?: string } }).worktree?.head
@@ -89,6 +97,9 @@ async function runTaskAudit(
     sessionID: reviewer.sessionID,
     text: prompt,
     delivery: "queue",
+    ...(images.length > 0
+      ? { files: images.map(({ uri, name }) => ({ uri, name })) }
+      : {}),
   });
   await ctx.session.wait(
     { sessionID: reviewer.sessionID },
