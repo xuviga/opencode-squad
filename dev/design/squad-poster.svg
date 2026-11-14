@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600" version="1.1">
+  <title>SQUAD — Many agents. One chain of command.</title>
+  <desc>Editable vector poster for SQUAD, a multi-agent orchestrator for OpenCode routing work across DeepSeek models. Paper field, ink type, one signal-red gate. No external assets.</desc>
+
+  <g id="field">
+    <rect id="paper-field" x="0" y="0" width="1200" height="1600" fill="#F2F0E9"/>
+    <rect id="ink-panel" x="0" y="1040" width="1200" height="264" fill="#0B0B0C"/>
+
+    <g id="rules" fill="#0B0B0C" shape-rendering="crispEdges">
+      <rect x="96" y="136" width="1008" height="2"/>
+      <rect x="96" y="704" width="1008" height="2"/>
+      <rect x="96" y="752" width="1008" height="2"/>
+      <rect x="96" y="1008" width="1008" height="2"/>
+    </g>
+
+    <g id="hairlines" fill="#CFCABF" shape-rendering="crispEdges">
+      <rect x="96" y="816" width="1008" height="2"/>
+      <rect x="96" y="880" width="1008" height="2"/>
+      <rect x="96" y="944" width="1008" height="2"/>
+    </g>
+
+    <rect id="signal-bar" x="96" y="376" width="240" height="8" fill="#E0361A"/>
+
+    <g id="chain-rail" shape-rendering="crispEdges">
+      <rect x="96" y="1152" width="1008" height="2" fill="#3A3936"/>
+      <rect x="96" y="1148" width="8" height="8" fill="#F2F0E9"/>
+      <rect x="240" y="1148" width="8" height="8" fill="#F2F0E9"/>
+      <rect x="384" y="1148" width="8" height="8" fill="#F2F0E9"/>
+      <rect x="528" y="1148" width="8" height="8" fill="#F2F0E9"/>
+      <rect id="review-node" x="672" y="1148" width="8" height="8" fill="#E0361A"/>
+      <rect x="816" y="1148" width="8" height="8" fill="#F2F0E9"/>
+      <rect x="960" y="1148" width="8" height="8" fill="#F2F0E9"/>
+    </g>
+  </g>
+
+  <g id="type" font-style="normal">
+
+    <g id="masthead-row">
+      <text x="96" y="112" font-family="Ubuntu Mono, Courier New, monospace" font-size="14" letter-spacing="1.96" fill="#0B0B0C">SQUAD — MULTI-AGENT ORCHESTRATION</text>
+      <text x="1104" y="112" text-anchor="end" font-family="Ubuntu Mono, Courier New, monospace" font-size="14" letter-spacing="1.96" fill="#5C5952">OPENCODE 2.3.0</text>
+    </g>
+
+    <text id="wordmark" x="96" y="352" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="900" font-size="272" letter-spacing="0" fill="#0B0B0C" textLength="1008" lengthAdjust="spacing">SQUAD</text>
+
+    <g id="statement">
+      <text x="96" y="464" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="72" letter-spacing="-1.44" fill="#0B0B0C">MANY AGENTS.</text>
+      <text x="96" y="544" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="72" letter-spacing="-1.44" fill="#0B0B0C">ONE CHAIN OF COMMAND.</text>
+    </g>
+
+    <g id="lead">
+      <text x="96" y="608" font-family="Inter, Arial, sans-serif" font-size="18" fill="#5C5952">SQUAD turns a mission into a plan, hires specialists at the</text>
+      <text x="96" y="640" font-family="Inter, Arial, sans-serif" font-size="18" fill="#5C5952">right grade, isolates every writer in its own worktree, and</text>
+      <text x="96" y="672" font-family="Inter, Arial, sans-serif" font-size="18" fill="#5C5952">refuses to merge without a blind review.</text>
+    </g>
+
+    <g id="ledger" font-family="Ubuntu Mono, Courier New, monospace">
+      <g id="ledger-head" font-size="12" letter-spacing="0.96" fill="#5C5952">
+        <text x="96" y="744">ID</text>
+        <text x="225" y="744">STAGE</text>
+        <text x="612" y="744">ROLE</text>
+        <text x="1104" y="744" text-anchor="end">OUTPUT</text>
+      </g>
+
+      <g id="ledger-row-1">
+        <text x="96" y="792" font-size="20" fill="#0B0B0C">01</text>
+        <text x="225" y="792" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="28" letter-spacing="-0.28" fill="#0B0B0C">PLAN</text>
+        <text x="612" y="792" font-size="14" letter-spacing="0.84" fill="#5C5952">BOSS · PLAN GATE</text>
+        <text x="1104" y="792" font-size="12" letter-spacing="0.96" text-anchor="end" fill="#0B0B0C">BUDGET SET</text>
+      </g>
+
+      <g id="ledger-row-2">
+        <text x="96" y="856" font-size="20" fill="#0B0B0C">02</text>
+        <text x="225" y="856" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="28" letter-spacing="-0.28" fill="#0B0B0C">HIRE</text>
+        <text x="612" y="856" font-size="14" letter-spacing="0.84" fill="#5C5952">PERSONA · WORKTREE</text>
+        <text x="1104" y="856" font-size="12" letter-spacing="0.96" text-anchor="end" fill="#0B0B0C">STAFFED</text>
+      </g>
+
+      <g id="ledger-row-3">
+        <text x="96" y="920" font-size="20" fill="#0B0B0C">03</text>
+        <text x="225" y="920" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="28" letter-spacing="-0.28" fill="#0B0B0C">REVIEW</text>
+        <text x="612" y="920" font-size="14" letter-spacing="0.84" fill="#5C5952">BLIND REVIEWER · NO TOOLS</text>
+        <text x="1104" y="920" font-size="12" letter-spacing="0.96" text-anchor="end" fill="#0B0B0C">PASS / REWORK</text>
+      </g>
+
+      <g id="ledger-row-4">
+        <text x="96" y="984" font-size="20" fill="#0B0B0C">04</text>
+        <text x="225" y="984" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="28" letter-spacing="-0.28" fill="#0B0B0C">INTEGRATE</text>
+        <text x="612" y="984" font-size="14" letter-spacing="0.84" fill="#5C5952">CHERRY-PICK · ABORT|THEIRS</text>
+        <text x="1104" y="984" font-size="12" letter-spacing="0.96" text-anchor="end" fill="#0B0B0C">MERGED</text>
+      </g>
+    </g>
+
+    <g id="panel">
+      <text x="96" y="1096" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="28" letter-spacing="-0.28" fill="#F2F0E9">ORCHESTRATED ON DEEPSEEK</text>
+
+      <g id="chain-labels" font-family="Ubuntu Mono, Courier New, monospace" font-size="12" letter-spacing="0.96" fill="#F2F0E9">
+        <text x="96" y="1184">MISSION</text>
+        <text x="240" y="1184">PLAN</text>
+        <text x="384" y="1184">HIRE</text>
+        <text x="528" y="1184">ASSIGN</text>
+        <text x="672" y="1184">REVIEW</text>
+        <text x="816" y="1184">INTEGRATE</text>
+        <text x="960" y="1184">FINALIZE</text>
+      </g>
+
+      <g id="panel-foot" font-family="Ubuntu Mono, Courier New, monospace" font-size="12" letter-spacing="0.96" fill="#F2F0E9">
+        <text x="96" y="1256">FAIL-CLOSED BY DEFAULT — NO REVIEW, NO MERGE</text>
+        <text x="1104" y="1256" text-anchor="end">WORKTREE ISOLATION · CHERRY-PICK INTEGRATION</text>
+      </g>
+    </g>
+
+    <text id="closing" x="96" y="1368" font-family="Inter Display, Inter, Arial, sans-serif" font-weight="600" font-size="40" letter-spacing="-0.6" fill="#0B0B0C" xml:space="preserve">NO PROOF. <tspan fill="#E0361A">NO MERGE.</tspan></text>
+
+    <g id="event-meta" font-family="Ubuntu Mono, Courier New, monospace" font-size="12" letter-spacing="0.96">
+      <text x="96" y="1440" fill="#0B0B0C">DEVELOPER CONFERENCE 2026</text>
+      <text x="483" y="1440" fill="#5C5952">14 NOV 2026</text>
+      <text x="1104" y="1440" text-anchor="end" fill="#5C5952">VENUE TBA</text>
+    </g>
+
+  </g>
+</svg>
