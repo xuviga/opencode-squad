@@ -204,7 +204,7 @@
 ```text
 src/
   index.ts              Plugin.define + 26 tools + RPC
-  version.ts            0.4.0
+  version.ts            0.5.0
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
   classes.ts            шаблоны классов + buildPlanTemplate
@@ -291,6 +291,7 @@ tests/
   classes.test.ts
   integrate.test.ts
   wait.test.ts
+  tui.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -347,7 +348,7 @@ tests/
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
 - [x] `squad_integrate` strategy: `abort` (по умолчанию) и `theirs` (авто-разрешение конфликта в пользу воркера), результат пишет strategy.
 - [x] `squad_cancel`: аварийное завершение миссии с причиной; non-integrated задачи → `cancelled`, merged работа сохраняется.
-- [x] Версия `0.4.0`, 26 инструментов, 51 тест.
+- [x] Версия `0.4.0`, 26 инструментов, 52 теста.
 
 **Проверки**
 
@@ -373,6 +374,8 @@ tests/
 | Stuck rework (reviewer fail) | ✅ c2 fail по BOM → rework → pass → integrate; attempts 1 |
 | Timeout live via shell | ❌ `session.shell` не держит `session.wait`: wait вернулся сразу и записал пустой report |
 | Timeout branch unit | ✅ `tests/wait.test.ts`: timedOut, task failed, ledger $0.01, interrupt вызван |
+| TUI wiring | ✅ `/squad` команда, `session.panel` claim, `panel.open("squad.panel")` |
+| Cancel live | ✅ `m_680e636a`, `m_5e2b1f16`, `m_244bbc9f` → `aborted`, 5 tasks cancelled |
 
 **Найдено**
 
@@ -389,18 +392,17 @@ tests/
 
 **Открытые вопросы**
 
-- TUI panel code готов, но живой визуальный прогон `/squad` → approve/reject ещё не выполнен.
+- TUI wiring покрыт unit-тестом (`/squad`, slot, panel.open), но живой визуальный прогон под TTY всё ещё не выполнен.
 - RPC `state` в shared service был недоступен, пока plugin location не прогрет; TUI использует тот же сервер, где plugin загружен.
 - `squad_image` заблокирован просроченным OpenCode API key; нужен валидный ключ для реальной генерации.
 - Live timeout через `session.shell` невозможен: `session.wait` не ждёт shell; ветка покрыта unit-тестом.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.
 - `.squad/squad.db` project-local.
-- Тестовые миссии `m_5e2b1f16` (invalid stress) и `m_244bbc9f` (isolation) нужно закрыть через `squad_cancel`.
+- Тестовые миссии закрыты через `squad_cancel`: `m_680e636a`, `m_5e2b1f16`, `m_244bbc9f` → `aborted`.
 
 **Дальше**
 
-1. Закрыть тестовые миссии `squad_cancel`, проверить, что не осталось активных миссий.
-2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-3. **Design class live** — после замены API key: `squad_image` + design template + review.
-4. M7: chaos-тесты, docs, release.
+1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
+2. **Design class live** — после замены API key: `squad_image` + design template + review.
+3. M7: chaos-тесты, release, README.
