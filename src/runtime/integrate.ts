@@ -1,7 +1,10 @@
 import { execFileSync, spawnSync } from "node:child_process";
 
 export type IntegrationResult = {
+  /** Commit in the main checkout (cherry-pick result). */
   commit: string;
+  /** Original worktree commit. */
+  sourceCommit: string;
   alreadyMerged: boolean;
 };
 
@@ -29,7 +32,11 @@ export function integrateWorktree(mainDirectory: string, worktreeDirectory: stri
     windowsHide: true,
   });
   if (ancestry.status === 0) {
-    return { commit, alreadyMerged: true };
+    return {
+      commit: git(["rev-parse", "HEAD"], mainDirectory).trim(),
+      sourceCommit: commit,
+      alreadyMerged: true,
+    };
   }
 
   const dirty = git(["status", "--porcelain"], mainDirectory).trim();
@@ -54,5 +61,9 @@ export function integrateWorktree(mainDirectory: string, worktreeDirectory: stri
     );
   }
 
-  return { commit, alreadyMerged: false };
+  return {
+    commit: git(["rev-parse", "HEAD"], mainDirectory).trim(),
+    sourceCommit: commit,
+    alreadyMerged: false,
+  };
 }

@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 happy path ✅ · M5 🟡**; TUI, M5 finish впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 ✅ · M5 core ✅ · integration gate ✅**; TUI/M6 universal впереди
 
 ## Как ведётся журнал
 
@@ -21,8 +21,8 @@
 | M1 Найм и работа | ✅ happy path | hire/assign/wait/check + ledger |
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
-| M4 Параллель и изоляция | 🟡 happy path | worktree/DAG/finalize/radar работают; conflict merge и parallel stress не тестировались |
-| M5 Споры, арбитр, аудитор | 🟡 core complete | disputes/arbiter/lessons, second-review + process auditor; live process audit нашёл реальные дефекты |
+| M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge работают |
+| M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
 | M6 Универсальные классы | ⚪ не начат | — |
 | M7 Закалка | ⚪ не начат | — |
 
@@ -151,6 +151,34 @@
   - P3: три раунда review использовали один `report.captured`, `attempts=0`.
 - Disputes live не запускались (unit: open → 2 replies → round limit → ruling worker → task submitted, reviewer −0.2, lesson).
 
+### 2026-11-14 · Сессия 7 — P1–P3 fixes + integration smoke
+
+**Сделано**
+
+- [x] Migration 007: `report_captured_at`, `merged_at`, `integration_commit`.
+- [x] `squad_wait` фиксирует `report_captured_at`; `squad_review`/`squad_check` отклоняют stale report после rework.
+- [x] `squad_finalize` требует:
+  - все tasks integrated;
+  - минимум `max(1, ceil(10% tasks))` second-review audit;
+  - `merged_at` для каждого task с worktree.
+- [x] `squad_integrate`: cherry-pick worktree HEAD в main, проверка чистоты main, abort при конфликте, запись `integration.merged`.
+- [x] `markMerged` хранит **main cherry-pick commit** и source worktree commit.
+- [x] 39 unit-тестов.
+
+**M6 integration smoke**
+
+- Mission `m_838c8066`, implementer `s_203ac0d8`, worktree `squad-implementer-a1eb2f`.
+- Worker commit `40d5f8f4b03fa69f716b3095880fb1af4d6168d9`; main cherry-pick `77847d366e9b6bcc9cbcc381b0ced4fc8f231481`; `dev/m6-proof.txt` = `M6_OK`.
+- Audit `a_ab232ed4`: second review pass/low.
+- Finalize: mission `done`; budget `$0.006279988` vs `$0.020000` expected; ratio 0.314; no warnings.
+- Events: `integration.merged` → `audit.passed` → `mission.done`.
+
+**P1–P3 status**
+
+- P1 (audit after done): fixed — finalize needs a second-review audit.
+- P2 (no merge evidence): fixed — `squad_integrate` cherry-pick + `integration.merged` + `merged_at`.
+- P3 (reused report capture): fixed — review/check reject a report captured before `assignedAt`; `squad_wait` records a fresh capture.
+
 **Структура**
 
 ```text
@@ -169,7 +197,8 @@ src/
   runtime/hire.ts       общий hire helper + worktree
   runtime/messages.ts   assistant text + last assistant
   runtime/diff.ts       per-task diff: git-worktree / vcs
-  db/schema.ts          migrations 001–006
+  runtime/integrate.ts  cherry-pick worktree → main
+  db/schema.ts          migrations 001–007
   db/index.ts           openSquadDb + WAL + миграции
   db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist/disputes/audits/lessons
   tools/status.ts       squad_status
@@ -193,6 +222,7 @@ src/
   tools/finalize.ts     squad_finalize
   tools/dispute.ts      squad_dispute
   tools/audit.ts        squad_audit
+  tools/integrate.ts    squad_integrate
 .opencode/agents/
   squad-reviewer.md     blind reviewer, no tools, steps 2
   squad-arbiter.md      arbiter, no tools, steps 2
@@ -209,7 +239,9 @@ dev/
   M4_FINAL.md           M4 final gate
   M5_PROMPT.md          M5 audit smoke
   M5_PROCESS.md         M5 process audit smoke
+  M6_PROMPT.md          M6 integration smoke
   one-line-proof.txt    artifact M2
+  m6-proof.txt          artifact M6 (merged to main)
 scripts/
   probe-client.ts
   probe-interrupt.ts
@@ -242,6 +274,7 @@ tests/
 | M4 live | ✅ worktree `squad-implementer-145026`, git-diff `dev/m4-proof.txt`, pass, mission `done`, budget `$0.010374` |
 | M5 audit live | ✅ second review `pass/low`, audit `a_ae53e211`, cost `$0.00154968` |
 | M5 process audit live | ❌ fail с 3 findings: audit after done, no merge event, one report capture across 3 rounds; cost `$0.0042789` |
+| M6 integration smoke | ✅ worker `40d5f8f` → main `77847d3`, audit pass, mission `done`, budget `$0.00628` |
 
 **Найдено и исправлено**
 
@@ -261,20 +294,20 @@ tests/
 
 - TUI-панель M0 ещё не начата.
 - Dispute `rule` live-тест не проведён (unit-тест покрывает).
-- Process audit P1: второй review должен идти до `mission.integrating/done` или mission остаётся открытой до audit pass.
-- Process audit P2: нет merge/cherry-pick worktree → main; `integrated` сейчас означает «принято», а не «слито».
-- Process audit P3: rework должен писать новый `report.captured` и увеличивать attempts; сейчас три раунда могли смотреть один отчёт.
+- ✅ P1: finalize требует second-review audit; audit gate enforced.
+- ✅ P2: `squad_integrate` cherry-pick + `integration.merged` + `merged_at`; main commit записан.
+- ✅ P3: review/check отклоняют stale report; `squad_wait` пишет `report_captured_at`.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Нет live-теста timeout-пути `squad_wait` с зависшим сотрудником.
 - Параллельный найм технически возможен, но stress-тест 3+ задач не проводился.
-- Worktree на detached HEAD; для merge нужен cherry-pick/branch.
+- Worktree source commit остаётся detached; main получает cherry-pick commit.
 - `.squad/squad.db` project-local.
-- Git: `0048b13` (M5 core); process-audit fixes — следующий коммит.
+- Git: `7f4ffed` (integration gate), `5f8066a` (M6 prompt), `77847d3` (worker cherry-pick); docs fix — следующий коммит.
 
 **Дальше**
 
-1. **Fix process audit P1–P3**: audit gate before finalize; merge evidence; fresh report per rework.
-2. **M4 merge**: cherry-pick/branch worktree → main, conflict detection.
-3. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
-4. Live dispute rule + stress-тест 3 параллельных задач.
-5. Live-тест timeout + замена зависшего сотрудника.
+1. **TUI-панель M0** — план, штат, расход, approve/edit/reject.
+2. **M6 universal classes** — research/writing/design/data/ops/creative + скиллы/MCP.
+3. Live dispute rule + stress-тест 3 параллельных задач.
+4. Live-тест timeout + замена зависшего сотрудника.
+5. Budget/TUI-интеграция и аудит процесса по расписанию.

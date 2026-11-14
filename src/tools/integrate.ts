@@ -61,10 +61,16 @@ export async function registerIntegrateTool(ctx: Plugin.Context, store: SquadSto
               ctx.location.directory,
               staff.worktreeDirectory,
             );
-            const merged = store.markMerged(args.mission_id, task.id, integration.commit);
+            const merged = store.markMerged(
+              args.mission_id,
+              task.id,
+              integration.commit,
+              integration.sourceCommit,
+            );
             results.push({
               taskID: task.id,
               commit: integration.commit,
+              sourceCommit: integration.sourceCommit,
               alreadyMerged: integration.alreadyMerged,
               task: merged,
             });

@@ -868,7 +868,7 @@ export class SquadStore {
     this.addEvent(missionID, null, "mission.integrating", {});
   }
 
-  markMerged(missionID: string, taskID: string, commit: string): Task {
+  markMerged(missionID: string, taskID: string, commit: string, sourceCommit?: string): Task {
     const task = this.requireTask(missionID, taskID);
     if (task.status !== "integrated") {
       throw new Error(`cannot merge task in status ${task.status}`);
@@ -882,7 +882,10 @@ export class SquadStore {
          WHERE mission_id = ? AND id = ?`,
       )
       .run(timestamp, commit.trim(), timestamp, missionID, taskID);
-    this.addEvent(missionID, taskID, "integration.merged", { commit: commit.trim() });
+    this.addEvent(missionID, taskID, "integration.merged", {
+      commit: commit.trim(),
+      sourceCommit: sourceCommit?.trim() || null,
+    });
     return this.requireTask(missionID, taskID);
   }
 
