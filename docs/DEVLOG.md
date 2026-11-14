@@ -364,7 +364,7 @@ tests/
 - [x] `squad_preview`: локальный SVG→PNG через `@resvg/resvg-js` (без image-модели).
 - [x] `squad_look`: image attachment в дочернюю сессию DeepSeek; ответ + cost в ledger.
 - [x] `squad_review`/`squad_audit` автоматически прикрепляют PNG из отчёта или рендерят preview SVG.
-- [x] Версия `0.6.0`, 28 инструментов, 59 тестов.
+- [x] Версия `0.6.0`, 28 инструментов, 60 тестов.
 
 **Проверки**
 
@@ -449,7 +449,7 @@ tests/
 
 **Дальше**
 
-1. M7: оставшиеся chaos-сценарии и release.
-2. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-3. Raster preview дизайна — при валидном image-key или через CorelDRAW/poster-compiler.
-4. Тег `v0.6.0` и финальный отчёт.
+1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
+2. Chaos-набор: finalize/audit/budget/abort покрыты; добавить session crash и duplicate verdict при необходимости.
+3. Raster generation с нуля — при появлении валидной image-модели (preview/vision уже работают).
+4. Тег `v0.6.0` поставлен; release notes — `CHANGELOG.md`.

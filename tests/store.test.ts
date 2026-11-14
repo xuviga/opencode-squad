@@ -391,6 +391,56 @@ describe("SquadStore", () => {
     );
   });
 
+  test("abortMission preserves integrated tasks and cancels the rest", () => {
+    const mission = store.createMission("Abort mixed");
+    store.submitPlan(mission.id, {
+      goal: "Abort mixed",
+      tasks: [
+        {
+          id: "done_task",
+          title: "Done",
+          class: "code",
+          role: "implementer",
+          grade: "G2",
+          acceptance: ["done"],
+        },
+        {
+          id: "open_task",
+          title: "Open",
+          class: "code",
+          role: "implementer",
+          grade: "G2",
+          acceptance: ["open"],
+        },
+      ],
+    });
+    store.approvePlan(mission.id);
+    const worker = store.hireStaff({
+      persona: "implementer",
+      grade: "G2",
+      agent: "build",
+      provider: "deepseek",
+      model: "deepseek-flash",
+      variant: "high",
+      sessionID: "ses_abort_worker",
+    });
+    store.assignTask(mission.id, "done_task", worker.id, { goal: "done" });
+    store.markTaskRunning(mission.id, "done_task");
+    store.saveRawReport(mission.id, "done_task", '{"status":"done"}');
+    store.assignReview(mission.id, "done_task", "s_abort_reviewer", "ses_abort_review");
+    store.saveVerdict(mission.id, "done_task", {
+      verdict: "pass",
+      severity: "low",
+      findings: [],
+      checked: ["diff", "tests"],
+    });
+    expect(store.requireTask(mission.id, "done_task").status).toBe("integrated");
+
+    store.abortMission(mission.id, "chaos abort");
+    expect(store.requireTask(mission.id, "done_task").status).toBe("integrated");
+    expect(store.requireTask(mission.id, "open_task").status).toBe("cancelled");
+  });
+
   test("abortMission cancels open tasks and records the reason", () => {
     const mission = store.createMission("Abort mission");
     store.submitPlan(mission.id, plan);
