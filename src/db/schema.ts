@@ -199,4 +199,15 @@ CREATE INDEX IF NOT EXISTS idx_audits_mission_task ON audits(mission_id, task_id
 CREATE INDEX IF NOT EXISTS idx_lessons_mission ON lessons(mission_id, created_at);
 `,
   },
+  {
+    version: 7,
+    name: "integration_gate",
+    sql: `
+ALTER TABLE tasks ADD COLUMN report_captured_at TEXT;
+ALTER TABLE tasks ADD COLUMN merged_at TEXT;
+ALTER TABLE tasks ADD COLUMN integration_commit TEXT;
+UPDATE tasks SET report_captured_at = updated_at WHERE raw_report IS NOT NULL AND report_captured_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_tasks_merged ON tasks(mission_id, merged_at);
+`,
+  },
 ];

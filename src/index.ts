@@ -11,6 +11,7 @@ import { registerDisputeTool } from "./tools/dispute";
 import { registerFireTool } from "./tools/fire";
 import { registerFinalizeTool } from "./tools/finalize";
 import { registerHireTool } from "./tools/hire";
+import { registerIntegrateTool } from "./tools/integrate";
 import { registerMissionTool } from "./tools/mission";
 import { registerPlanTool } from "./tools/plan";
 import { registerProbeTool } from "./tools/probe";
@@ -52,6 +53,7 @@ export default Plugin.define({
       registerFinalizeTool(ctx, store),
       registerDisputeTool(ctx, store),
       registerAuditTool(ctx, store),
+      registerIntegrateTool(ctx, store),
     ]);
 
     console.log(

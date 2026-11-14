@@ -69,6 +69,9 @@ export type Task = {
   report: unknown;
   verdict: unknown;
   rawReport: string | null;
+  reportCapturedAt: string | null;
+  mergedAt: string | null;
+  integrationCommit: string | null;
   attempts: number;
   createdAt: string;
   updatedAt: string;
@@ -184,6 +187,9 @@ type TaskRow = {
   report_json: string | null;
   verdict_json: string | null;
   raw_report: string | null;
+  report_captured_at: string | null;
+  merged_at: string | null;
+  integration_commit: string | null;
   attempts: number;
   created_at: string;
   updated_at: string;
@@ -307,6 +313,9 @@ function mapTask(row: TaskRow): Task {
     report: parseJSON<unknown>(row.report_json),
     verdict: parseJSON<unknown>(row.verdict_json),
     rawReport: row.raw_report,
+    reportCapturedAt: row.report_captured_at,
+    mergedAt: row.merged_at,
+    integrationCommit: row.integration_commit,
     attempts: row.attempts,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -685,10 +694,10 @@ export class SquadStore {
     const timestamp = now();
     this.db
       .query(
-        `UPDATE tasks SET raw_report = ?, status = 'submitted', updated_at = ?
+        `UPDATE tasks SET raw_report = ?, status = 'submitted', report_captured_at = ?, updated_at = ?
          WHERE mission_id = ? AND id = ?`,
       )
-      .run(rawReport, timestamp, missionID, taskID);
+      .run(rawReport, timestamp, timestamp, missionID, taskID);
     this.addEvent(missionID, taskID, "report.captured", {
       chars: rawReport.length,
     });
@@ -859,6 +868,24 @@ export class SquadStore {
     this.addEvent(missionID, null, "mission.integrating", {});
   }
 
+  markMerged(missionID: string, taskID: string, commit: string): Task {
+    const task = this.requireTask(missionID, taskID);
+    if (task.status !== "integrated") {
+      throw new Error(`cannot merge task in status ${task.status}`);
+    }
+    if (!commit.trim()) throw new Error("integration commit is required");
+    if (task.mergedAt) return task;
+    const timestamp = now();
+    this.db
+      .query(
+        `UPDATE tasks SET merged_at = ?, integration_commit = ?, updated_at = ?
+         WHERE mission_id = ? AND id = ?`,
+      )
+      .run(timestamp, commit.trim(), timestamp, missionID, taskID);
+    this.addEvent(missionID, taskID, "integration.merged", { commit: commit.trim() });
+    return this.requireTask(missionID, taskID);
+  }
+
   finalizeMission(missionID: string): Mission {
     const mission = this.requireMission(missionID);
     if (mission.status !== "integrating") {
@@ -868,6 +895,28 @@ export class SquadStore {
     if (tasks.length === 0 || !tasks.every((task) => task.status === "integrated")) {
       throw new Error("cannot finalize: not all tasks are integrated");
     }
+
+    const requiredAudits = Math.max(1, Math.ceil(tasks.length * 0.1));
+    const auditRow = this.db
+      .query(
+        `SELECT COUNT(*) AS count FROM audits
+         WHERE mission_id = ? AND kind = 'second_review'`,
+      )
+      .get(missionID) as { count: number };
+    if (auditRow.count < requiredAudits) {
+      throw new Error(
+        `cannot finalize: requires ${requiredAudits} second-review audit(s), found ${auditRow.count}; run squad_audit`,
+      );
+    }
+
+    for (const task of tasks) {
+      if (task.mergedAt) continue;
+      const staff = task.staffID ? this.getStaff(task.staffID) : undefined;
+      if (staff?.worktreeDirectory) {
+        throw new Error(`cannot finalize: worktree of ${task.id} is not merged; run squad_integrate`);
+      }
+    }
+
     this.db
       .query(
         `UPDATE missions SET status = 'done', updated_at = ?

@@ -50,6 +50,12 @@ export async function registerCheckTool(ctx: Plugin.Context, store: SquadStore) 
 
           const task = store.requireTask(args.mission_id, args.task_id);
           if (!task.rawReport) throw new Error(`task has no captured report: ${task.id}`);
+          if (
+            task.assignedAt &&
+            (!task.reportCapturedAt || task.reportCapturedAt < task.assignedAt)
+          ) {
+            throw new Error(`report is stale for ${task.id}; run squad_wait after rework`);
+          }
 
           let report;
           try {

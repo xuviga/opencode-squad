@@ -65,6 +65,15 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
           if (task.status !== "submitted") {
             throw new Error(`cannot review task in status ${task.status}`);
           }
+          if (!task.rawReport) {
+            throw new Error(`task has no captured report: ${task.id}; run squad_wait`);
+          }
+          if (
+            task.assignedAt &&
+            (!task.reportCapturedAt || task.reportCapturedAt < task.assignedAt)
+          ) {
+            throw new Error(`report is stale for ${task.id}; run squad_wait after rework`);
+          }
 
           const reviewerGrade = nextGrade(task.grade);
           const reviewerPersona = task.grade === "G4" ? "critic" : "reviewer";

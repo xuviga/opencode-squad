@@ -173,6 +173,16 @@ describe("SquadStore", () => {
 
     expect(store.requireTask(mission.id, "t_001").status).toBe("integrated");
     expect(store.requireMission(mission.id).status).toBe("integrating");
+    expect(() => store.finalizeMission(mission.id)).toThrow("second-review audit");
+    store.recordAudit({
+      missionID: mission.id,
+      taskID: "t_001",
+      kind: "second_review",
+      status: "pass",
+      reviewerStaffID: "s_second",
+      verdict: { verdict: "pass", findings: [], checked: ["diff", "tests"] },
+      notes: "second review passed",
+    });
     expect(store.finalizeMission(mission.id).status).toBe("done");
     const score = store.scorecard(worker.id);
     expect(score.passAt1).toBe(0);
