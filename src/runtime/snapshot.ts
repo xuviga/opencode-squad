@@ -33,7 +33,7 @@ const SKIP_DIRECTORIES = new Set([
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_FILES = 5_000;
 const MAX_PATCH_CHARS = 8_000;
-const MAX_TOTAL_PATCH_CHARS = 60_000;
+const MAX_TOTAL_PATCH_CHARS = 120_000;
 
 export type SnapshotEntry = {
   path: string;
@@ -225,16 +225,34 @@ function lineDiff(oldText: string, newText: string): string {
 export function snapshotDiff(
   snapshotDirectory: string,
   currentDirectory: string,
-): { source: "snapshot"; snapshot: { createdAt: string; root: string }; data: SnapshotFileChange[] } {
+): {
+  source: "snapshot";
+  snapshot: { createdAt: string; root: string };
+  data: SnapshotFileChange[];
+  truncated: boolean;
+  trimmedFiles: string[];
+} {
   const manifest = readSnapshot(snapshotDirectory);
   const { files, truncated } = walk(currentDirectory);
   const changed: SnapshotFileChange[] = [];
+  const trimmedFiles: string[] = [];
   let total = 0;
 
+  // Every changed file is listed. Once the patch budget is exhausted the file
+  // keeps its header with an empty patch, so a reviewer can never silently miss
+  // files that sort late in the alphabet.
   const push = (change: SnapshotFileChange) => {
-    if (total >= MAX_TOTAL_PATCH_CHARS) return;
     const room = MAX_TOTAL_PATCH_CHARS - total;
-    const patch = change.patch.length > room ? `${change.patch.slice(0, room)}\n...(truncated)` : change.patch;
+    if (room <= 0) {
+      trimmedFiles.push(change.file);
+      changed.push({ ...change, patch: "" });
+      return;
+    }
+    const patch =
+      change.patch.length > room
+        ? `${change.patch.slice(0, room)}\n...(truncated)`
+        : change.patch;
+    if (patch.length < change.patch.length) trimmedFiles.push(change.file);
     changed.push({ ...change, patch });
     total += patch.length;
   };
@@ -304,6 +322,66 @@ export function snapshotDiff(
     source: "snapshot",
     snapshot: { createdAt: manifest.createdAt, root: manifest.root },
     data: changed,
-    ...(manifest.truncated || truncated ? { truncated: true } : {}),
+    truncated: manifest.truncated || truncated || trimmedFiles.length > 0,
+    trimmedFiles,
   };
+}
+
+/**
+ * Renders a diff (git or snapshot) for a model prompt without dropping files:
+ * every file header is kept, patches share the remaining budget.
+ */
+export function formatDiffForPrompt(diff: unknown, maxChars = 120_000): string {
+  const record = diff as {
+    data?: Array<{ file?: string; status?: string; patch?: string }>;
+    trimmedFiles?: string[];
+    truncated?: boolean;
+  } | null;
+
+  if (!record || !Array.isArray(record.data)) {
+    const text = JSON.stringify(diff, null, 2);
+    return text.length > maxChars ? `${text.slice(0, maxChars)}\n...(truncated)` : text;
+  }
+
+  const files = record.data;
+  const budget = Math.max(4_000, maxChars);
+  const headerCost = files.reduce(
+    (sum, item) => sum + `### ${item.file ?? "unknown"} [${item.status ?? "changed"}]\n`.length,
+    0,
+  );
+  const patchBudget = Math.max(0, budget - headerCost);
+  const perFile = files.length
+    ? Math.max(200, Math.min(8_000, Math.floor(patchBudget / files.length)))
+    : 0;
+  const chunks: string[] = [];
+  const trimmed: string[] = [];
+  let remaining = patchBudget;
+
+  for (const item of files) {
+    const name = item.file ?? "unknown";
+    const header = `### ${name} [${item.status ?? "changed"}]`;
+    const patch = item.patch ?? "";
+    const room = Math.max(0, Math.min(perFile, remaining));
+    const body =
+      room <= 0
+        ? "(patch omitted: diff budget reached; file is changed)"
+        : patch.length > room
+          ? `${patch.slice(0, room)}\n...(truncated)`
+          : patch;
+    if (room <= 0 || body.length < patch.length || patch.length === 0) trimmed.push(name);
+    remaining = Math.max(0, remaining - Math.min(patch.length, room));
+    chunks.push(`${header}\n${body}`);
+  }
+
+  const meta = [
+    `files: ${files.length}`,
+    `budget: ${budget - remaining}/${budget} chars`,
+    ...(record.truncated || record.trimmedFiles?.length || trimmed.length
+      ? [
+          `partial patches: ${[...new Set([...(record.trimmedFiles ?? []), ...trimmed])].join(", ")}`,
+        ]
+      : []),
+  ].join("; ");
+
+  return `${meta}\n\n${chunks.join("\n\n")}`;
 }

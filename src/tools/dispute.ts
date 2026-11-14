@@ -4,6 +4,7 @@ import { parseRulingText } from "../ruling";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { extractLastAssistantText } from "../runtime/messages";
+import { formatDiffForPrompt } from "../runtime/snapshot";
 import { fail, ok } from "./result";
 
 type DisputeInput = {
@@ -112,7 +113,7 @@ export async function registerDisputeTool(ctx: Plugin.Context, store: SquadStore
             } catch (error) {
               diff = { error: errorMessage(error) };
             }
-            const diffText = JSON.stringify(diff, null, 2).slice(0, 24_000);
+            const diffText = formatDiffForPrompt(diff);
 
             const arbiter = await hireEmployee(ctx, store, {
               missionID: dispute.missionID,

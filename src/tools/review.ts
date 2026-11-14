@@ -4,6 +4,7 @@ import { nextGrade } from "../personas";
 import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
+import { formatDiffForPrompt } from "../runtime/snapshot";
 import { requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
@@ -95,7 +96,7 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
           } catch (error) {
             diff = { error: error instanceof Error ? error.message : String(error) };
           }
-          const diffText = JSON.stringify(diff, null, 2).slice(0, 24_000);
+          const diffText = formatDiffForPrompt(diff);
           const images = taskImages(ctx, store, task, diff);
           const worktree = (
             diff && typeof diff === "object" ? (diff as {
@@ -109,6 +110,7 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             "You see only the Task Brief, the Worker Report, and the diff. You do not see the worker's reasoning.",
             "You have no tools: do not read files, search, or run commands. Judge only the provided material.",
             "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+            "If the diff reports partial patches or trimmed files, do not assume those files are unchanged: treat them as unverified and name them in the verdict.",
             `This task is class "${task.class}". Required checks for a pass: ${checks.join(", ")}.`,
             ...(mission.isolation === "none"
               ? [

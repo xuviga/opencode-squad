@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { captureSnapshot, snapshotDiff } from "../src/runtime/snapshot";
+import { captureSnapshot, formatDiffForPrompt, snapshotDiff } from "../src/runtime/snapshot";
 
 let root: string;
 let project: string;
@@ -21,8 +21,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe("snapshot diff", () => {
-  test("detects added, modified and deleted files", () => {
+describe("snapshot diff", () => {  test("detects added, modified and deleted files", () => {
     captureSnapshot(project, snapshot);
 
     writeFileSync(join(project, "a.txt"), "one\ntwo\nthree\n", "utf8");
@@ -59,5 +58,45 @@ describe("snapshot diff", () => {
     const blob = diff.data.find((item) => item.file === "blob.bin");
     expect(blob?.status).toBe("binary");
     expect(blob?.patch).toContain("binary");
+  });
+
+  test("lists every changed file even when the patch budget is exhausted", () => {
+    mkdirSync(join(project, "scripts"));
+    const lines = Array.from({ length: 600 }, (_, index) => `line ${index}`).join("\n");
+    const names: string[] = [];
+    for (let index = 0; index < 30; index += 1) {
+      const name = `scripts/f${String(index).padStart(2, "0")}.txt`;
+      writeFileSync(join(project, name), `${lines}\n`, "utf8");
+      names.push(name);
+    }
+    captureSnapshot(project, snapshot);
+
+    for (const name of names) {
+      writeFileSync(join(project, name), `${lines}\nchanged\n`, "utf8");
+    }
+
+    const diff = snapshotDiff(snapshot, project);
+    const listed = new Set(diff.data.map((item) => item.file));
+    for (const name of names) expect(listed.has(name)).toBe(true);
+    expect(diff.data.length).toBeGreaterThanOrEqual(names.length);
+    expect(diff.truncated).toBe(true);
+    expect(diff.trimmedFiles.length).toBeGreaterThan(0);
+    const trimmed = diff.data.find((item) => item.patch === "");
+    expect(trimmed).toBeDefined();
+  });
+
+  test("formatter keeps every file header under a small prompt budget", () => {
+    const text = formatDiffForPrompt(
+      {
+        data: [
+          { file: "a.txt", status: "modified", patch: "x".repeat(2000) },
+          { file: "scripts/zzz.txt", status: "added", patch: "y".repeat(2000) },
+        ],
+      },
+      600,
+    );
+    expect(text).toContain("### a.txt");
+    expect(text).toContain("### scripts/zzz.txt");
+    expect(text).toContain("partial patches");
   });
 });

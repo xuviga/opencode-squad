@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1 — 2026-11-14
+
+- **Fixed silent file loss in snapshot diffs**: `snapshotDiff` used to drop every changed file once the total patch budget was exhausted, so late-alphabet paths (`scripts/*`) never reached the reviewer. Every changed file is now listed; the patch budget is shared, exhausted files keep a header with `patch: ""` and appear in `trimmedFiles`.
+- **Fixed prompt slicing**: `review`, `audit` and `dispute` cut the diff JSON at 24 000 chars. Replaced with `formatDiffForPrompt` (120 000-char budget) which keeps every file header and marks partial patches.
+- **Reviewer rule**: partial/trimmed files are unverified, not unchanged; the verdict must name them.
+- Tests: 88.
+
 ## 0.9.0 — 2026-11-14
 
 - **In-place isolation**: `squad_mission { isolation: "none" }` runs employees directly in the project folder, no git required. Migration 009 adds `missions.isolation` and `tasks.snapshot_directory`.

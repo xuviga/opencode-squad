@@ -7,6 +7,7 @@ import { missionEvidence, taskEvidence } from "../runtime/evidence";
 import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
 import { extractLastAssistantText } from "../runtime/messages";
+import { formatDiffForPrompt } from "../runtime/snapshot";
 import { parseVerdictText, requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
@@ -111,6 +112,7 @@ async function runTaskAudit(
     "The first reviewer passed this task. Verify it independently and adversarially.",
     "You see only the Task Brief, Worker Report, and diff. You do not see the first reviewer's reasoning.",
     "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+    "If the diff reports partial patches or trimmed files, do not assume those files are unchanged; treat them as unverified and name them in the verdict.",
     `Integration evidence: ${JSON.stringify(evidence)}.`,
     ...(evidence.reviewRoundsWithoutRework > 0
       ? [
@@ -145,7 +147,7 @@ async function runTaskAudit(
     "Worker Report:",
     task.rawReport ?? "(none)",
     "Diff:",
-    JSON.stringify(diff, null, 2).slice(0, 24_000),
+    formatDiffForPrompt(diff),
   ].join("\n\n");
 
   await ctx.session.prompt({
