@@ -40,6 +40,7 @@
 - [x] `src/tools/status.ts` — `squad_status`, снимок Capability Registry.
 - [x] `src/runtime/probe.ts` + `src/tools/probe.ts` — `squad_probe`: create child → prompt → wait → context/diff → interrupt → cleanup.
 - [x] `scripts/probe-client.ts` — standalone probe через `@opencode/client` + `Service.ensure()`.
+- [x] `scripts/probe-interrupt.ts` — проверка прерывания работающей дочерней сессии.
 - [x] `scripts/smoke-store.ts` — проверка SQLite-потока mission → plan → approve → budget.
 - [x] SQLite: `src/db/schema.ts` (migration 001), `src/db/index.ts`, `src/db/store.ts`.
 - [x] M0 server-side tools: `squad_mission`, `squad_plan`, `squad_budget`.
@@ -77,6 +78,7 @@ dev/
 | `bun install` | 267 packages installed, 15.77s |
 | `bun run typecheck` | ✅ без ошибок |
 | `bun run probe` | ✅ `ok:true`, child session создан, ответ `SQUAD_PROBE_OK`, cost `$0.000251`, tokens 1647/7, diff `[]` |
+| `bun run probe:interrupt` | ✅ `interrupted:true`, outcome `interrupted`, child завершён до первого токена (cost 0) |
 | `opencode run --standalone ... "Use squad_status"` | ✅ плагин `squad` active, tools `squad_status`/`squad_probe` зарегистрированы; registry: 163 models, 8 agents, 111 tools, 9 skills |
 | `opencode run ... "Use squad_probe"` | ✅ `ok:true`, child `SES...`, ответ `SQUAD_PROBE_OK`, child удалён |
 | `bun run scripts/smoke-store.ts` | ✅ mission `m_f73dc4d7`: draft → plan_gate → staffing, plan v1, budget expected `$0.01` |
@@ -103,15 +105,16 @@ dev/
 
 **Открытые вопросы**
 
-- Нужен тест `interrupt` на реально работающей дочерней сессии (не после wait).
+- ✅ Прерывание работающей сессии проверено: `probe:interrupt` → `interrupted:true`.
 - TUI-панель M0 ещё не начата.
 - `squad_status` в Code Mode возвращает JSON-строку; для цепочек удобнее `output`, но текущий контракт рабочий.
 - Нужно решить, где хранить `.squad/squad.db`: project-local сейчас; для глобального штата между проектами — отдельный data-dir.
+- Git инициализирован, initial commit `5cec9b7`.
 
 **Дальше**
 
-1. Добавить тест прерывания работающей сессии.
-2. Реализовать TUI-панель M0 (план, штат, расход).
-3. Добавить `squad_hire` / `squad_assign` (M1) и ledger-запись из per-session cost/tokens.
-4. Добавить unit-тесты для `validatePlan` и `SquadStore`.
-5. `git init` и первый коммит после стабилизации каркаса.
+1. Реализовать TUI-панель M0 (план, штат, расход).
+2. Добавить `squad_hire` / `squad_assign` (M1) и ledger-запись из per-session cost/tokens.
+3. Добавить unit-тесты для `validatePlan` и `SquadStore`.
+4. Добавить `squad_status` в компактном режиме и проверить после фильтра плагинов.
+5. Зафиксировать второй коммит с interrupt-тестом и обновлённым DEVLOG.

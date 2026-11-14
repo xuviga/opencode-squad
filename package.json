@@ -15,7 +15,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "probe": "bun run scripts/probe-client.ts",
-    "probe:keep": "bun run scripts/probe-client.ts --keep"
+    "probe:keep": "bun run scripts/probe-client.ts --keep",
+    "probe:interrupt": "bun run scripts/probe-interrupt.ts",
+    "smoke:store": "bun run scripts/smoke-store.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.3.0"
