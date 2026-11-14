@@ -94,8 +94,12 @@ export async function registerWaitTool(ctx: Plugin.Context, store: SquadStore) {
               args.task_id,
               `wait failed: ${message}`,
             );
+            const timedOut =
+              (error instanceof Error &&
+                (error.name === "TimeoutError" || error.name === "AbortError")) ||
+              /timed out|timeout/i.test(message);
             return ok({
-              timedOut: true,
+              timedOut,
               error: message,
               task: failed,
               session: info

@@ -420,7 +420,7 @@ SQUAD · m_001  ██████░░░░ 62%  $0.08 (est $0.12)
 
 ## 15. План реализации
 
-> Фактический прогресс на 14.11.2026: M0.0 ✅; M0 server-side ✅ + TUI panel/RPC code ✅ (live visual check впереди); M1 ✅; M2 ✅; M3 ✅; M4 ✅ (worktree/DAG/finalize/radar/merge, 3-параллельный stress + conflict `abort/theirs`); M5 core ✅ (disputes/arbiter/second-review/process audit; P1–P3 fixed); M6 ✅ (10 class templates, skill/mcp/tool capabilities, class-aware verdict, squad_image; live research `m_e6049e51` и design `m_2e72a622`, preview+vision); integration gate ✅; M7 🟡 (cancel, auto-commit, commit metadata, preview/look, API drift, README). Детали, команды и результаты — `docs/DEVLOG.md`.
+> Фактический прогресс на 14.11.2026: M0.0 ✅; M0 server-side ✅ + TUI panel/RPC ✅ + live PTY `/squad` reject/approve ✅; M1 ✅; M2 ✅; M3 ✅; M4 ✅; M5 core ✅; M6 ✅ (research + design live, preview/vision); integration gate ✅; M7 🟡 (TUI live, vector image, chaos crash/duplicate, cancel, auto-commit, API drift, README; release notes). Детали — `docs/DEVLOG.md`.
 
 ### M0.0. Capability probe (0.5–1 день)
 - [ ] Probe-плагин на живом хосте 2.3.0: `session.create` с `parentID`, `model.variant`, `permissions`; `session.prompt`; `session.wait`; `session.interrupt`; `session.context` / `session.diff`; `worktree.create/remove/refresh`; `experimental.generate.decisions`.
@@ -480,7 +480,8 @@ SQUAD · m_001  ██████░░░░ 62%  $0.08 (est $0.12)
 ### M7. Закалка (4–6 дней)
 - [x] `squad_cancel` + API drift test + contract test поверхности инструментов
 - [x] README и журнал разработки
-- [ ] chaos-тесты, шаблоны, релиз
+- [x] TUI live PTY (`/squad`, reject/approve), `squad_image engine:"vector"`, chaos crash/duplicate
+- [ ] финальный релиз и оставшиеся chaos-сценарии
 - **Приёмка:** ни один chaos-сценарий не оставляет миссию подвешенной.
 
 **Итого:** ~5–6 недель + 1 день на probe. Рабочая контора (M0–M2) — ~2 недели.

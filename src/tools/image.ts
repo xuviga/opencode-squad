@@ -3,14 +3,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Model } from "@opencode/schema/model";
 import type { SquadStore } from "../db/store";
+import { renderSvgPreview } from "../runtime/preview";
 import { fail, ok } from "./result";
 
 type ImageInput = {
   prompt?: string;
+  engine?: "api" | "vector";
   model?: string;
   aspect?: string;
   resolution?: string;
   n?: number;
+  width?: number;
   out_dir?: string;
   name?: string;
   mission_id?: string;
@@ -68,15 +71,17 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
     editor.add({
       name: "image",
       description:
-        "Generate an image with the experimental.generate.image API, write the files under .squad/artifacts, and optionally record the cost in the mission ledger. Use for design and creative tasks.",
+        "Generate an image. engine=api uses experimental.generate.image; engine=vector asks a text model (DeepSeek) for a self-contained SVG and rasterizes it with resvg, so it works without an image model. Files go under .squad/artifacts.",
       input: {
         type: "object",
         properties: {
           prompt: { type: "string" },
+          engine: { type: "string", enum: ["api", "vector"] },
           model: { type: "string" },
           aspect: { type: "string" },
           resolution: { type: "string" },
           n: { type: "integer", minimum: 1, maximum: 4 },
+          width: { type: "integer", minimum: 64, maximum: 8192 },
           out_dir: { type: "string" },
           name: { type: "string" },
           mission_id: { type: "string" },
@@ -90,6 +95,50 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
         const args = (input ?? {}) as ImageInput;
         try {
           if (!args.prompt) throw new Error("prompt is required");
+          const engine = args.engine ?? "api";
+          const outDir = resolve(
+            ctx.location.directory,
+            args.out_dir?.trim() || ".squad/artifacts",
+          );
+          await mkdir(outDir, { recursive: true });
+          const baseName = sanitizeName(args.name ?? `image-${Date.now()}`);
+
+          if (engine === "vector") {
+            const reference = args.model?.trim() || "deepseek/deepseek-flash#high";
+            const model = Model.Ref.parse(reference);
+            const generated = await ctx.experimental.generate.text({
+              model,
+              prompt: [
+                "Return ONLY one complete, self-contained SVG document and no prose or markdown fences.",
+                "Use width and height attributes, a viewBox, vector shapes and editable <text> elements.",
+                "Do not use <image>, external URLs, @font-face, data: URIs or embedded binaries.",
+                `Subject: ${args.prompt}`,
+              ].join("\n"),
+            });
+            const match = generated.text.match(/<svg[\s\S]*?<\/svg>/i);
+            if (!match) throw new Error("the text model did not return an SVG document");
+            const svg = match[0];
+            if (/<image\b|@font-face|data:|url\(\s*['"]?https?:/i.test(svg)) {
+              throw new Error("generated SVG references an external or embedded asset");
+            }
+            const svgPath = join(outDir, `${baseName}.svg`);
+            const pngPath = join(outDir, `${baseName}.png`);
+            await writeFile(svgPath, svg, "utf8");
+            const preview = renderSvgPreview(svgPath, pngPath, args.width ?? 1024);
+            return ok({
+              engine,
+              model: reference,
+              svg_path: svgPath,
+              files: [
+                { path: svgPath, mime: "image/svg+xml", bytes: Buffer.byteLength(svg) },
+                { path: preview.path, mime: "image/png", bytes: preview.bytes },
+              ],
+              width: preview.width,
+              height: preview.height,
+              out_dir: outDir,
+            });
+          }
+
           const reference = args.model?.trim() || (await pickImageModel(ctx));
           const model = Model.Ref.parse(reference);
 
@@ -101,13 +150,6 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
             ...(args.resolution ? { resolution: args.resolution } : {}),
           });
 
-          const outDir = resolve(
-            ctx.location.directory,
-            args.out_dir?.trim() || ".squad/artifacts",
-          );
-          await mkdir(outDir, { recursive: true });
-
-          const baseName = sanitizeName(args.name ?? `image-${Date.now()}`);
           const files: Array<{ path: string; mime: string; bytes: number }> = [];
           const images = result.images ?? [];
           for (const [index, image] of images.entries()) {

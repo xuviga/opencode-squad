@@ -2,7 +2,7 @@
 
 Мульти-агентный оркестратор для **OpenCode 2.3.0**: босс планирует миссию, нанимает сотрудников, проводит слепую ревизию, разрешает споры и сливает работу в main через изолированные worktree.
 
-Текущая версия: **0.6.0** · 28 инструментов · 60 тестов.
+Текущая версия: **0.7.0** · 28 инструментов · 62 теста.
 
 ## Что внутри
 
@@ -15,7 +15,7 @@
 - **TUI**: команда `/squad` и панель `session.panel` с approve/reject, статусом миссии, штатом и расходом.
 - **Универсальные классы**: `code`, `research`, `writing`, `design`, `data`, `ops`, `review`, `planning`, `creative`, `mixed` через `squad_template`.
 - **Capabilities**: `skill:<id>`, `mcp:<server>`, `tool:<name>`; `squad_capabilities` проверяет доступность, `squad_assign` прикрепляет скиллы и передаёт guidance.
-- **Картинки**: `squad_image` генерирует raster через `experimental.generate.image`; `squad_preview` рендерит SVG в PNG; `squad_look` отправляет изображение DeepSeek и возвращает визуальный ответ.
+- **Картинки**: `squad_image` (`engine:"api"` — `experimental.generate.image`; `engine:"vector"` — DeepSeek SVG → PNG через resvg, без image-модели); `squad_preview` рендерит SVG в PNG; `squad_look` отправляет изображение DeepSeek и возвращает визуальный ответ.
 - **Визуальная ревизия**: `squad_review` и `squad_audit` автоматически прикрепляют PNG из отчёта или рендерят preview SVG, чтобы слепой ревизор видел дизайн.
 
 ## Установка
@@ -35,6 +35,15 @@
 - Bun;
 - `@opencode/plugin` `2.3.0` (exact pin);
 - для TUI-панели — `@opentui/core`, `@opentui/solid`, `solid-js`, `@opencode/theme`.
+
+TUI-часть локального пакета грузится через глобальный `cli.json`:
+
+```jsonc
+// ~/.config/opencode/cli.json
+{ "plugins": ["D:/path/to/opencode-squad"] }
+```
+
+Project `opencode.jsonc` загружает server-часть; `cli.json` — TUI-часть.
 
 ## Быстрый старт
 
@@ -91,6 +100,8 @@ CHANGELOG.md        история версий
 ```bash
 bun run typecheck
 bun test
+bun run tui:live
+bun run vision:probe
 ```
 
 Живые прогоны и известные ограничения — в `docs/DEVLOG.md`.
@@ -98,6 +109,6 @@ bun test
 ## Ограничения
 
 - `squad_image` (генерация raster с нуля) требует image-модель; raster preview существующего SVG делается локально через `squad_preview`, а DeepSeek смотрит PNG через `squad_look`.
-- Живой визуальный TUI-прогон под TTY не автоматизирован; wiring покрыт unit-тестом.
+- TUI live автоматизирован: `bun run tui:live` поднимает реальный PTY, открывает `/squad`, проверяет reject → resubmit → approve и статусы в SQLite.
 - `session.wait` ждёт model work, но не `session.shell`; timeout-ветка покрыта unit-тестом с fake session.
 - `.squad/squad.db` хранится в проекте; для нескольких проектов — своя БД на проект.

@@ -1,6 +1,6 @@
 {
   "name": "opencode-squad",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "SQUAD — multi-agent orchestrator plugin for OpenCode 2.3.0",
@@ -21,7 +21,9 @@
     "probe:keep": "bun run scripts/probe-client.ts --keep",
     "probe:interrupt": "bun run scripts/probe-interrupt.ts",
     "smoke:store": "bun run scripts/smoke-store.ts",
-    "inspect": "bun run scripts/inspect.ts"
+    "inspect": "bun run scripts/inspect.ts",
+    "tui:live": "node scripts/tui-live.cjs",
+    "vision:probe": "bun run scripts/vision-probe.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.3.0",
@@ -40,6 +42,7 @@
     "@types/bun": "^1.4.3",
     "@types/node": "^22.20.0",
     "effect": "4.1.0",
+    "node-pty": "^1.1.0",
     "typescript": "^5.9.3"
   }
 }

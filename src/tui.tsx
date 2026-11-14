@@ -37,10 +37,13 @@ export function SquadPanel(props: { panel: PanelInput }) {
   const refresh = async () => {
     try {
       const next = await rpc().state({ mission_id: state()?.mission?.id });
-      setState(next as SquadState);
+      const payload = (next as { data?: unknown } | null)?.data ?? next;
+      setState(payload as SquadState);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : JSON.stringify(cause);
+      console.error("[squad.tui] state error", message);
+      setError(message);
     }
   };
 

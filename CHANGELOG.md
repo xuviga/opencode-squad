@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — 2026-11-14
+
+- TUI live automation on real PTY: `/squad`, panel render, reject → resubmit → approve, SQLite status checks.
+- TUI part loading documented: global `cli.json` for the TUI, project `opencode.jsonc` for the server.
+- RPC `state` JSON sanitization; TUI unwraps `{data}` responses.
+- `squad_image` `engine:"vector"`: DeepSeek generates SVG, resvg rasterizes to PNG without an image model.
+- Chaos: crashed worker → task failed (not timeout), ledger + interrupt; duplicate review/verdict rejected.
+- 62 tests, 28 tools.
+
 ## 0.6.0 — 2026-11-14
 
 - `squad_preview`: локальный SVG → PNG через `@resvg/resvg-js`, без image-модели.

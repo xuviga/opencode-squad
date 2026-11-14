@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ (research + design live) · integration gate ✅ · M7 hardening 🟡**; TUI live check и release впереди
+> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ (research + design live) · integration gate ✅ · M7 hardening 🟡**; release notes/tag впереди
 
 ## Как ведётся журнал
 
@@ -24,7 +24,7 @@
 | M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge; 3 параллельных задачи live `m_a5669cde`; conflict strategy `abort/theirs` |
 | M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
 | M6 Универсальные классы | ✅ | 10 шаблонов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research `m_e6049e51` и design `m_2e72a622` |
-| M7 Закалка | 🟡 начат | cancel, API drift test, README, chaos/contracts; release впереди |
+| M7 Закалка | 🟡 начат | TUI live ✅, vector image ✅, chaos crash/duplicate ✅, changelog; финальный release |
 
 ## Журнал
 
@@ -203,8 +203,8 @@
 
 ```text
 src/
-  index.ts              Plugin.define + 26 tools + RPC
-  version.ts            0.6.0
+  index.ts              Plugin.define + 28 tools + RPC
+  version.ts            0.7.0
   config.ts             грейды G0–G4, бюджет, пути
   plan.ts               MissionPlan + валидация
   classes.ts            шаблоны классов + buildPlanTemplate
@@ -295,6 +295,12 @@ scripts/
   session-dump.ts
   recover-review.ts
   rpc-state.ts
+  tui-live.cjs
+  tui-fixture.ts
+  tui-session.ts
+  tui-status.ts
+  tui-resubmit.ts
+  vision-probe.ts
 tests/
   plan.test.ts
   classes.test.ts
@@ -305,6 +311,7 @@ tests/
   commit.test.ts
   diff.test.ts
   preview.test.ts
+  chaos.test.ts
   report.test.ts
   verdict.test.ts
   ruling.test.ts
@@ -438,10 +445,40 @@ tests/
 4. Ревизор трактовал имена локальных шрифтов как external assets. Исправлено правилом; arbiter подтвердил.
 5. Dispute сработал как задумано: ложный fail отменён, task вернулся в `submitted`, повторная ревизия — `pass`.
 
+### 2026-11-14 · Сессия 11 — TUI live, vector raster, chaos
+
+**Сделано**
+
+- [x] TUI live-харнесс на `node-pty`: реальный TTY, `/squad`, panel render, reject/approve.
+- [x] TUI-часть грузится через `~/.config/opencode/cli.json` (`plugins: ["D:\\codex\\opencode-squad"]`); project `opencode.jsonc` грузит только server-часть.
+- [x] RPC `state` санитизируется через JSON roundtrip — иначе `rpc.invalid_output at ["tasks"]` из-за `undefined` полей.
+- [x] TUI разворачивает `{data}`-обёртку RPC, если она есть.
+- [x] `squad_image` `engine:"vector"`: DeepSeek генерирует self-contained SVG, resvg делает PNG — raster from scratch без image-модели.
+- [x] Chaos: crash воркера → `timedOut:false`, task `failed`, ledger, interrupt; duplicate review/verdict отклоняются.
+- [x] Версия `0.7.0`, 28 инструментов, 62 теста.
+
+**Проверки**
+
+| Сценарий | Результат |
+|---|---|
+| TUI live `m_a0ebc492` | ✅ `plan_gate` → reject `draft` → resubmit `plan_gate` → approve `staffing`; panel и mission видимы |
+| TUI plugin load | ✅ toast `SQUAD TUI loaded`; `/squad` найден в command palette |
+| Vector image | ✅ `engine:"vector"`: SVG 609 B, PNG 16 521 B, 1024×1024; PNG визуально проверен |
+| Session crash | ✅ `SessionCrashed` → task `failed`, `timedOut:false`, ledger $0.004, interrupt |
+| Duplicate review | ✅ второй `assignReview` → `cannot review task in status in_review` |
+| Duplicate verdict | ✅ второй `saveVerdict` → `cannot save verdict in task status integrated` |
+
+**Найдено**
+
+1. Project `plugins` загружает server-часть; TUI-часть для локального пакета нужно добавить в глобальный `cli.json`.
+2. `store.tuiState()` содержит `undefined` в task-полях; RPC JSON-схема отвергала output. JSON roundtrip обязателен.
+3. `session.wait` при crash возвращал `timedOut:true`; исправлено: timeout определяется по `TimeoutError`/тексту, crash → `timedOut:false`.
+4. `squad_image` теперь умеет `engine:"vector"`: official DeepSeek text → SVG → resvg PNG, без image-key.
+5. `node-pty` на этом Windows-хосте падает в `conpty_console_list_agent` при exit; драйвер переопределяет `_getConsoleProcessList` на пустой список.
+
 **Открытые вопросы**
 
-- Генерация raster с нуля (`squad_image`) по-прежнему требует image-модель; preview существующего SVG и vision-анализ работают без неё.
-- TUI wiring покрыт unit-тестом, но живой визуальный прогон под TTY всё ещё не выполнен. Попытка `testRender` панели в Bun test упирается в server-build `solid-js` (`Orphan text`), поэтому render-тест не включён.
+- Генерация raster через внешнюю image-модель (`engine:"api"`) остаётся опциональной; `engine:"vector"` работает без неё.
 - `session.wait` не ждёт `session.shell`; timeout-ветка покрыта fake-session тестом.
 - 10% sampling реализован как случайный выбор одной unaudited integrated task.
 - Worktree source commit остаётся detached; main получает cherry-pick commit.
@@ -449,7 +486,6 @@ tests/
 
 **Дальше**
 
-1. **Live TUI check** — `/squad`, panel render, approve/reject, reload.
-2. Chaos-набор: finalize/audit/budget/abort покрыты; добавить session crash и duplicate verdict при необходимости.
-3. Raster generation с нуля — при появлении валидной image-модели (preview/vision уже работают).
-4. Тег `v0.6.0` поставлен; release notes — `CHANGELOG.md`.
+1. Опционально: image-generation API при валидной image-модели.
+2. Процессный аудит по расписанию и отчёт по бюджету в TUI.
+3. Тег `v0.7.0`, release notes в `CHANGELOG.md`.

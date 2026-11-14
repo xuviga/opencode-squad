@@ -78,7 +78,7 @@ export default Plugin.define({
       rpcRegistration = await ctx.rpc.register(SquadRpc, {
         state: async (input) => {
           const args = (input ?? {}) as { mission_id?: string };
-          return store.tuiState(args.mission_id);
+          return JSON.parse(JSON.stringify(store.tuiState(args.mission_id)));
         },
         plan: async (input) => {
           const args = (input ?? {}) as {
