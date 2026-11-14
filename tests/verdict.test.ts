@@ -49,6 +49,12 @@ describe("validateVerdict", () => {
     ]);
   });
 
+  test("rejects a fail with low severity", () => {
+    expect(() => validateVerdict({ ...fail, severity: "medium" })).toThrow(
+      "severity high or critical",
+    );
+  });
+
   test("accepts a fail with an evidenced finding", () => {
     expect(validateVerdict(fail).findings).toHaveLength(1);
   });

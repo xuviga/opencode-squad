@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { validatePlan } from "../plan";
+import { ensureInPlaceLock } from "../runtime/inplace-lock";
 import { fail, ok } from "./result";
 
 type PlanInput = {
@@ -77,8 +78,21 @@ export async function registerPlanTool(ctx: Plugin.Context, store: SquadStore) {
               return ok({ mission, plan: store.getPlan(args.mission_id) });
             }
             case "approve": {
-              const mission = store.approvePlan(args.mission_id, args.note ?? "");
-              return ok({ mission, mission_id: mission.id });
+              const mission = store.requireMission(args.mission_id);
+              if (mission.isolation === "none") {
+                const lock = ensureInPlaceLock(ctx.location.directory, mission.id, (holderID) => {
+                  const holder = store.getMission(holderID);
+                  return !holder || ["done", "failed", "aborted"].includes(holder.status);
+                });
+                if (!lock.ok) {
+                  throw new Error(
+                    `folder is locked by in-place mission ${lock.holder?.missionID} since ${lock.holder?.createdAt}; ` +
+                      `finalize or cancel it before starting another in-place mission`,
+                  );
+                }
+              }
+              const missionApproved = store.approvePlan(args.mission_id, args.note ?? "");
+              return ok({ mission: missionApproved, mission_id: missionApproved.id });
             }
             case "reject": {
               const mission = store.rejectPlan(args.mission_id, args.note ?? "");

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2 — 2026-11-14
+
+- **Reviewer contract tightened**: a `fail` requires severity `high` or `critical` and an unmet acceptance criterion, missing/faked deliverable, or a correctness/security/data-loss defect. Style, naming, formatting and documentation polish are `pass` with findings. Validation rejects low/medium fails.
+- **Late false-pass guard**: if a second-review audit fails a task whose dependents are already integrated, the task stays integrated and the mission becomes `failed` (event `audit.late_false_pass`) instead of corrupting a shipped chain.
+- **In-place folder lock**: `.squad/locks/inplace.json` gives one in-place mission exclusive ownership of a directory; approve acquires, finalize/cancel release, terminal or 2h-stale holders are evicted.
+- **Worker budget**: briefs carry `tool_call_budget` (research 10, others 20), a stop policy and a research batching rule; the prompt states the hard budget.
+- **Mission command**: `/mission` now plans minimal dependency edges (independent tasks run in parallel), prefers G1 for collection, starts all ready tasks per wave with parallel `squad_wait`, and reports progress per wave.
+- 98 tests.
+
 ## 0.9.1 — 2026-11-14
 
 - **Fixed silent file loss in snapshot diffs**: `snapshotDiff` used to drop every changed file once the total patch budget was exhausted, so late-alphabet paths (`scripts/*`) never reached the reviewer. Every changed file is now listed; the patch budget is shared, exhausted files keep a header with `patch: ""` and appear in `trimmedFiles`.

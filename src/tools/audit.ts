@@ -112,6 +112,8 @@ async function runTaskAudit(
     "The first reviewer passed this task. Verify it independently and adversarially.",
     "You see only the Task Brief, Worker Report, and diff. You do not see the first reviewer's reasoning.",
     "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+    "Fail ONLY when an acceptance criterion is unmet, the deliverable is missing/faked, or a correctness, security or data-loss defect has severity high or critical.",
+    "Style, naming, formatting, documentation polish and optional improvements are a PASS with findings, not a fail. A fail with low or medium severity is invalid.",
     "If the diff reports partial patches or trimmed files, do not assume those files are unchanged; treat them as unverified and name them in the verdict.",
     `Integration evidence: ${JSON.stringify(evidence)}.`,
     ...(evidence.reviewRoundsWithoutRework > 0

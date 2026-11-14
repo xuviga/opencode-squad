@@ -1,6 +1,6 @@
 {
   "name": "opencode-squad",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "type": "module",
   "description": "SQUAD — multi-agent orchestrator plugin for OpenCode 2.3.0",

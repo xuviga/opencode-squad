@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { missionEvidence } from "../runtime/evidence";
+import { releaseInPlaceLock } from "../runtime/inplace-lock";
 import { removeWorktrees } from "../runtime/worktree";
 import { fail, ok } from "./result";
 
@@ -45,6 +46,9 @@ export async function registerFinalizeTool(ctx: Plugin.Context, store: SquadStor
           }
 
           const mission = store.finalizeMission(args.mission_id);
+          if (mission.isolation === "none") {
+            releaseInPlaceLock(ctx.location.directory, args.mission_id);
+          }
 
           const staffIDs = [
             ...new Set(

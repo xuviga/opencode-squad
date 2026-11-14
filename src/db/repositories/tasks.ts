@@ -35,6 +35,11 @@ export class TaskRepository {
     return rows.map(mapTask);
   }
 
+  /** Tasks in the same mission that depend on the given task. */
+  listDependents(missionID: string, taskID: string): Task[] {
+    return this.listTasks(missionID).filter((task) => task.dependsOn.includes(taskID));
+  }
+
   assignTask(missionID: string, taskID: string, staffID: string, brief: unknown): Task {
     const mission = this.store.requireMission(missionID);
     if (!["staffing", "executing"].includes(mission.status)) {
@@ -294,8 +299,7 @@ export class TaskRepository {
     return this.requireTask(missionID, taskID);
   }
 
-  failTask(missionID: string, taskID: string, reason: string): Task {
-    const timestamp = now();
+  failTask(missionID: string, taskID: string, reason: string): Task {    const timestamp = now();
     this.db
       .query(
         `UPDATE tasks SET status = 'failed', updated_at = ?

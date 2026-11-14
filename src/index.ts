@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin";
 import { openSquadDb } from "./db/index";
 import { SquadStore } from "./db/store";
 import { SquadRpc } from "./rpc";
+import { ensureInPlaceLock } from "./runtime/inplace-lock";
 import { registerAppraiseTool } from "./tools/appraise";
 import { registerAssignTool } from "./tools/assign";
 import { registerAuditTool } from "./tools/audit";
@@ -89,6 +90,18 @@ export default Plugin.define({
             note?: string;
           };
           if (args.action === "approve") {
+            const mission = store.requireMission(args.mission_id);
+            if (mission.isolation === "none") {
+              const lock = ensureInPlaceLock(ctx.location.directory, mission.id, (holderID) => {
+                const holder = store.getMission(holderID);
+                return !holder || ["done", "failed", "aborted"].includes(holder.status);
+              });
+              if (!lock.ok) {
+                throw new Error(
+                  `folder is locked by in-place mission ${lock.holder?.missionID} since ${lock.holder?.createdAt}`,
+                );
+              }
+            }
             return { mission: store.approvePlan(args.mission_id, args.note ?? "") };
           }
           return { mission: store.rejectPlan(args.mission_id, args.note ?? "") };

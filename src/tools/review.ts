@@ -110,6 +110,8 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             "You see only the Task Brief, the Worker Report, and the diff. You do not see the worker's reasoning.",
             "You have no tools: do not read files, search, or run commands. Judge only the provided material.",
             "Do not trust the report: verify the acceptance criteria against the evidence and diff.",
+            "Fail ONLY when an acceptance criterion is unmet, the deliverable is missing/faked, or a correctness, security or data-loss defect has severity high or critical.",
+            "Style, naming, formatting, documentation polish and optional improvements are a PASS with findings, not a fail. A fail with low or medium severity is invalid.",
             "If the diff reports partial patches or trimmed files, do not assume those files are unchanged: treat them as unverified and name them in the verdict.",
             `This task is class "${task.class}". Required checks for a pass: ${checks.join(", ")}.`,
             ...(mission.isolation === "none"

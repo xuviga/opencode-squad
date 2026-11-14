@@ -96,6 +96,11 @@ export function validateVerdict(
   if (outcome === "fail" && findings.length === 0) {
     throw new Error("fail verdict requires at least one finding with evidence");
   }
+  if (outcome === "fail" && severity !== "high" && severity !== "critical") {
+    throw new Error(
+      "fail verdict requires severity high or critical; use a pass verdict with findings for minor issues",
+    );
+  }
   if (outcome === "pass") {
     for (const required of requiredChecks(taskClass, context)) {
       if (!checked.includes(required)) {

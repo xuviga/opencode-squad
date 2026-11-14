@@ -45,26 +45,58 @@ export class AuditRepository {
 
       if (input.status === "fail") {
         if (isTaskAudit && task) {
-          this.db
-            .query(
-              `UPDATE tasks SET status = 'returned', updated_at = ?
-               WHERE mission_id = ? AND id = ?`,
-            )
-            .run(timestamp, input.missionID, input.taskID);
-          this.db
-            .query(
-              `UPDATE missions SET status = 'executing', updated_at = ?
-               WHERE id = ?`,
-            )
-            .run(timestamp, input.missionID);
-          this.store.staff.penalize(task.reviewerStaffID, -0.3, `false pass audit ${id}`);
-          this.store.addLesson(
-            input.missionID,
-            input.taskID,
-            `False pass audit ${id}: ${input.notes ?? "second review failed"}`,
-            ["audit", "false_pass"],
+          const dependents = this.store.listDependents(input.missionID, input.taskID);
+          const shipped = dependents.filter(
+            (dependent) => dependent.status === "integrated" || dependent.mergedAt,
           );
-          this.store.addEvent(input.missionID, input.taskID, "audit.false_pass", { auditID: id });
+          if (shipped.length > 0) {
+            // Reopening would invalidate work that already landed downstream.
+            // Fail the mission instead of silently corrupting a shipped chain.
+            this.db
+              .query(
+                `UPDATE missions SET status = 'failed', updated_at = ?
+                 WHERE id = ? AND status NOT IN ('done', 'failed', 'aborted')`,
+              )
+              .run(timestamp, input.missionID);
+            this.store.staff.penalize(
+              task.reviewerStaffID,
+              -0.3,
+              `late false pass audit ${id}`,
+            );
+            this.store.addLesson(
+              input.missionID,
+              input.taskID,
+              `Late false pass audit ${id}: ${input.notes ?? "second review failed"}. ` +
+                `Dependents already integrated (${shipped.map((row) => row.id).join(", ")}); ` +
+                `the task is left integrated and the mission is failed for manual review.`,
+              ["audit", "false_pass", "late"],
+            );
+            this.store.addEvent(input.missionID, input.taskID, "audit.late_false_pass", {
+              auditID: id,
+              dependents: shipped.map((row) => row.id),
+            });
+          } else {
+            this.db
+              .query(
+                `UPDATE tasks SET status = 'returned', updated_at = ?
+                 WHERE mission_id = ? AND id = ?`,
+              )
+              .run(timestamp, input.missionID, input.taskID);
+            this.db
+              .query(
+                `UPDATE missions SET status = 'executing', updated_at = ?
+                 WHERE id = ?`,
+              )
+              .run(timestamp, input.missionID);
+            this.store.staff.penalize(task.reviewerStaffID, -0.3, `false pass audit ${id}`);
+            this.store.addLesson(
+              input.missionID,
+              input.taskID,
+              `False pass audit ${id}: ${input.notes ?? "second review failed"}`,
+              ["audit", "false_pass"],
+            );
+            this.store.addEvent(input.missionID, input.taskID, "audit.false_pass", { auditID: id });
+          }
         } else {
           this.store.addLesson(
             input.missionID,

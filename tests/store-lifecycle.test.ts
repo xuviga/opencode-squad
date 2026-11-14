@@ -67,8 +67,81 @@ describe("mission janitor state", () => {
   });
 });
 
-describe("worktree bookkeeping", () => {
-  test("missions default to worktree isolation", () => {
+describe("late false-pass audits", () => {
+  function twoTaskMission() {
+    const mission = store.createMission("late", "", "none");
+    store.submitPlan(mission.id, {
+      goal: "g",
+      tasks: [
+        {
+          id: "t1",
+          title: "one",
+          class: "code",
+          role: "implementer",
+          grade: "G1",
+          acceptance: ["ok"],
+        },
+        {
+          id: "t2",
+          title: "two",
+          class: "code",
+          role: "implementer",
+          grade: "G1",
+          acceptance: ["ok"],
+          dependsOn: ["t1"],
+        },
+      ],
+    });
+    store.approvePlan(mission.id);
+    return mission;
+  }
+
+  test("reopens a task when nothing depends on it yet", () => {
+    const mission = twoTaskMission();
+    db.query("UPDATE tasks SET status = 'integrated' WHERE mission_id = ? AND id = 't1'").run(
+      mission.id,
+    );
+    db.query("UPDATE missions SET status = 'reviewing' WHERE id = ?").run(mission.id);
+
+    store.recordAudit({
+      missionID: mission.id,
+      taskID: "t1",
+      kind: "second_review",
+      status: "fail",
+      notes: "false pass",
+    });
+
+    expect(store.requireTask(mission.id, "t1").status).toBe("returned");
+    expect(store.requireMission(mission.id).status).toBe("executing");
+  });
+
+  test("fails the mission instead of reopening a task whose dependents shipped", () => {
+    const mission = twoTaskMission();
+    db.query("UPDATE tasks SET status = 'integrated' WHERE mission_id = ? AND id = 't1'").run(
+      mission.id,
+    );
+    db.query("UPDATE tasks SET status = 'integrated' WHERE mission_id = ? AND id = 't2'").run(
+      mission.id,
+    );
+    db.query("UPDATE missions SET status = 'integrating' WHERE id = ?").run(mission.id);
+
+    store.recordAudit({
+      missionID: mission.id,
+      taskID: "t1",
+      kind: "second_review",
+      status: "fail",
+      notes: "late false pass",
+    });
+
+    expect(store.requireTask(mission.id, "t1").status).toBe("integrated");
+    expect(store.requireMission(mission.id).status).toBe("failed");
+    expect(store.listEvents(mission.id).some((event) => event.type === "audit.late_false_pass")).toBe(
+      true,
+    );
+  });
+});
+
+describe("worktree bookkeeping", () => {  test("missions default to worktree isolation", () => {
     expect(store.createMission("default", "").isolation).toBe("worktree");
   });
 

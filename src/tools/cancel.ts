@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { removeWorktree } from "../runtime/worktree";
+import { releaseInPlaceLock } from "../runtime/inplace-lock";
 import { fail, ok } from "./result";
 
 type CancelInput = {
@@ -39,6 +40,9 @@ export async function registerCancelTool(ctx: Plugin.Context, store: SquadStore)
 
           const tasks = store.listTasks(args.mission_id);
           const mission = store.abortMission(args.mission_id, args.reason);
+          if (mission.isolation === "none") {
+            releaseInPlaceLock(ctx.location.directory, args.mission_id);
+          }
 
           const removals: Array<{ directory: string; removed: boolean; error?: string }> = [];
           for (const staffID of [

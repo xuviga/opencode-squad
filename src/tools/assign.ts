@@ -3,6 +3,7 @@ import { Skill } from "@opencode/schema/skill";
 import { join } from "node:path";
 import { resolveCapabilities } from "../capabilities";
 import type { SquadStore } from "../db/store";
+import { taskConstraints, toolBudgetFor } from "../runtime/assign-policy";
 import { captureSnapshot } from "../runtime/snapshot";
 import { fail, ok } from "./result";
 
@@ -78,6 +79,9 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
           );
           const capabilityResolution = await resolveCapabilities(ctx, capabilities);
 
+          const toolBudget = toolBudgetFor(task.class);
+          const constraints = taskConstraints(task.class, args.constraints);
+
           const brief = {
             task_id: task.id,
             mission_id: task.missionID,
@@ -87,7 +91,7 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             grade: staff.grade,
             context: args.context ?? [],
             acceptance: task.acceptance,
-            constraints: args.constraints ?? {},
+            constraints,
             capabilities,
             capability_resolution: capabilityResolution.resolved,
             output_schema: "report_v1",
@@ -114,6 +118,9 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             );
           }
           promptLines.push("Task Brief:", JSON.stringify(brief, null, 2));
+          promptLines.push(
+            `Hard budget: at most ${toolBudget} tool calls. When the budget is exhausted, stop and return status=blocked with partial evidence instead of continuing.`,
+          );
           const prompt = promptLines.join("\n\n");
 
           const assigned = store.assignTask(args.mission_id, args.task_id, args.staff_id, brief);
