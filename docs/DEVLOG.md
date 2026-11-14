@@ -81,7 +81,7 @@ dev/
 | `bun run probe:interrupt` | ✅ `interrupted:true`, outcome `interrupted`, child завершён до первого токена (cost 0) |
 | `opencode run --standalone ... "Use squad_status"` | ✅ плагин `squad` active, tools `squad_status`/`squad_probe` зарегистрированы; registry: 163 models, 8 agents, 111 tools, 9 skills |
 | `opencode run ... "Use squad_probe"` | ✅ `ok:true`, child `SES...`, ответ `SQUAD_PROBE_OK`, child удалён |
-| `bun run scripts/smoke-store.ts` | ✅ mission `m_f73dc4d7`: draft → plan_gate → staffing, plan v1, budget expected `$0.01` |
+| `bun run scripts/smoke-store.ts` | ✅ mission создана, draft → plan_gate → staffing, plan v1, ledger 1 entry, budget actual `$0.00025` |
 | `opencode run ... mission/plan/budget` | ✅ mission `m_dcf6814e`: create → plan_gate → staffing; budget scope mission |
 
 **Подтверждено**

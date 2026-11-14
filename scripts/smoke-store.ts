@@ -22,6 +22,15 @@ const submitted = store.submitPlan(mission.id, {
   ],
 });
 const approved = store.approvePlan(mission.id, "smoke approval");
+store.recordLedger({
+  missionID: mission.id,
+  provider: "deepseek",
+  model: "deepseek-flash",
+  variant: "low",
+  inputTokens: 1000,
+  outputTokens: 100,
+  cost: 0.00025,
+});
 
 console.log(
   JSON.stringify(
