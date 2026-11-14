@@ -349,7 +349,7 @@ tests/
 - [x] `squad_image`: `ctx.experimental.generate.image`, `Model.Ref.parse`, авто-выбор image-модели, запись base64 в `.squad/artifacts`, учёт cost в ledger.
 - [x] `squad_integrate` strategy: `abort` (по умолчанию) и `theirs` (авто-разрешение конфликта в пользу воркера), результат пишет strategy.
 - [x] `squad_cancel`: аварийное завершение миссии с причиной; non-integrated задачи → `cancelled`, merged работа сохраняется.
-- [x] Версия `0.4.0`, 26 инструментов, 52 теста.
+- [x] Версия `0.5.0`, 26 инструментов, 54 теста.
 
 **Проверки**
 
