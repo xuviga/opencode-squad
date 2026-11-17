@@ -3,7 +3,7 @@
 > Старт: 14.11.2026
 > Платформа: **OpenCode 2.3.0**
 > API: `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Текущая стадия: **M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1–M4 ✅ · M5 core ✅ · M6 universal ✅ (research + design live) · integration gate ✅ · M7 hardening 🟡**; release notes/tag впереди
+> Текущая стадия: **0.9.2** (`ff6737d`) · 29 инструментов · 98 тестов · `bun run verify` зелёный (17.11.2026). M0–M6 закрыты, M7 закрыт в 0.8–0.9.2; остался release tag.
 
 ## Как ведётся журнал
 
@@ -17,14 +17,14 @@
 | Этап | Статус | Примечание |
 |---|---|---|
 | M0.0 Capability probe | ✅ завершён | probe-плагин и standalone probe работают |
-| M0 Каркас + TUI + план-гейт | 🟡 TUI code ready | SQLite, mission/plan/budget, plan gate, TUI panel + `/squad` + RPC; live visual check не проведён |
+| M0 Каркас + TUI + план-гейт | ✅ | SQLite, mission/plan/budget, plan gate, TUI panel + `/squad` + RPC; live PTY reject/approve — сессия 11 |
 | M1 Найм и работа | ✅ happy path | hire/assign/wait/check + ledger |
 | M2 Ревизия и возврат | ✅ happy path | blind reviewer, verdict, rework, report |
 | M3 HR и карьера | ✅ happy path | scorecard, appraise, fire+blacklist, career |
 | M4 Параллель и изоляция | ✅ | worktree/DAG/finalize/radar/merge; 3 параллельных задачи live `m_a5669cde`; conflict strategy `abort/theirs` |
 | M5 Споры, арбитр, аудитор | ✅ | disputes/arbiter/lessons, second-review + process auditor; audit gate enforced |
 | M6 Универсальные классы | ✅ | 10 шаблонов, capabilities skill/mcp/tool, class-aware ревизия, `squad_image`; live research `m_e6049e51` и design `m_2e72a622` |
-| M7 Закалка | 🟡 начат | TUI live ✅, vector image ✅, chaos crash/duplicate ✅, changelog; финальный release |
+| M7 Закалка | ✅ 0.8–0.9.2 | gc, split store, CI, in-place, snapshot-diff, severity floor, late false-pass, in-place lock, бюджеты воркера; release tag не поставлен |
 
 ## Журнал
 
@@ -198,127 +198,6 @@
 - RPC `state` в shared service: `RPC is unavailable: squad`, пока plugin location не прогрет; TUI подключается к тому же серверу, где plugin загружен.
 - `opencode --standalone` TUI-процесс запущен; `squad.tui` не дал ошибок загрузки; панель визуально не открывалась.
 - Живой визуальный TUI-прогон (`/squad` → panel → approve) ещё не выполнен.
-
-**Структура**
-
-```text
-src/
-  index.ts              Plugin.define + 28 tools + RPC
-  version.ts            0.7.0
-  config.ts             грейды G0–G4, бюджет, пути
-  plan.ts               MissionPlan + валидация
-  classes.ts            шаблоны классов + buildPlanTemplate
-  capabilities.ts       резолв skill/mcp/tool + guidance
-  report.ts             TaskReport + парсер
-  verdict.ts            Verdict + pass/fail правила
-  ruling.ts             Ruling арбитра + parser
-  process-audit.ts      process audit schema/parser
-  rpc.ts                SquadRpc state/plan contract
-  tui.tsx               TUI plugin: /squad panel, approve/reject
-  json.ts               последний JSON-объект
-  personas.ts           персоны, грейды, agent mapping, permissions
-  runtime/probe.ts      M0.0 probe
-  runtime/hire.ts       общий hire helper + worktree
-  runtime/messages.ts   assistant text + last assistant
-  runtime/diff.ts       per-task diff: git-worktree / vcs
-  runtime/integrate.ts  cherry-pick worktree → main
-  runtime/commit.ts     авто-коммит worktree после wait
-  runtime/preview.ts    SVG → PNG через resvg
-  runtime/images.ts     сбор/preview картинок для ревизии
-  runtime/paths.ts      безопасный resolve путей
-  db/schema.ts          migrations 001–008
-  db/index.ts           openSquadDb + WAL + миграции
-  db/store.ts           missions/tasks/staff/events/ledger/appraisals/blacklist/disputes/audits/lessons
-  tools/status.ts       squad_status
-  tools/probe.ts        squad_probe
-  tools/mission.ts      squad_mission
-  tools/plan.ts         squad_plan
-  tools/template.ts     squad_template
-  tools/capabilities.ts squad_capabilities
-  tools/image.ts        squad_image
-  tools/preview.ts      squad_preview
-  tools/look.ts         squad_look
-  tools/cancel.ts       squad_cancel
-  tools/budget.ts       squad_budget
-  tools/hire.ts         squad_hire
-  tools/staff.ts        squad_staff
-  tools/assign.ts       squad_assign
-  tools/wait.ts         squad_wait
-  tools/check.ts        squad_check
-  tools/review.ts       squad_review
-  tools/verdict.ts      squad_verdict
-  tools/report.ts       squad_report
-  tools/appraise.ts     squad_appraise
-  tools/fire.ts         squad_fire
-  tools/scorecard.ts    squad_scorecard
-  tools/career.ts       squad_career
-  tools/tasks.ts        squad_tasks
-  tools/finalize.ts     squad_finalize
-  tools/dispute.ts      squad_dispute
-  tools/audit.ts        squad_audit
-  tools/integrate.ts    squad_integrate
-.opencode/agents/
-  squad-reviewer.md     blind reviewer, no tools, steps 2
-  squad-arbiter.md      arbiter, no tools, steps 2
-  squad-auditor.md      process auditor, no tools, steps 2
-dev/
-  opencode.jsonc        локальная загрузка плагина
-  M1_PROMPT.md          M1 smoke
-  M2_PROMPT.md          M2 smoke
-  M2_REWORK.md          M2 rework smoke
-  M3_PROMPT.md          M3 smoke
-  M4_PROMPT.md          M4 smoke
-  M4_CONTINUE.md        M4 diff continuation
-  M4_DIAG.md            M4 diff diagnostic
-  M4_FINAL.md           M4 final gate
-  M5_PROMPT.md          M5 audit smoke
-  M5_PROCESS.md         M5 process audit smoke
-  M6_PROMPT.md          M6 integration smoke
-  m6-caps-prompt.md     M6 capabilities smoke
-  m6-live-prompt.md     M6 research mission smoke
-  m6-synth-prompt.md    M6 synthesize step
-  m6-review-prompt.md   M6 collect review
-  m6-review-synth-prompt.md M6 synth review
-  m6-finalize-prompt.md M6 audit + finalize
-  m6-image-prompt.md    M6 image smoke
-  design/concept.md     design live: concept
-  design/squad-poster.svg design live: editable poster
-  design/squad-poster.png design live: raster preview
-  one-line-proof.txt    artifact M2
-  m6-proof.txt          artifact M6 (merged to main)
-scripts/
-  probe-client.ts
-  probe-interrupt.ts
-  smoke-store.ts
-  inspect.ts
-  session-inspect.ts
-  session-dump.ts
-  recover-review.ts
-  rpc-state.ts
-  tui-live.cjs
-  tui-fixture.ts
-  tui-session.ts
-  tui-status.ts
-  tui-resubmit.ts
-  vision-probe.ts
-tests/
-  plan.test.ts
-  classes.test.ts
-  integrate.test.ts
-  wait.test.ts
-  tui.test.ts
-  api-drift.test.ts
-  commit.test.ts
-  diff.test.ts
-  preview.test.ts
-  chaos.test.ts
-  report.test.ts
-  verdict.test.ts
-  ruling.test.ts
-  process-audit.test.ts
-  messages.test.ts
-  store.test.ts
-```
 
 **Проверки**
 
@@ -598,7 +477,7 @@ tests/
 - [x] Поздний false-pass: зависимые integrated → задача остаётся, миссия `failed`, событие `audit.late_false_pass`.
 - [x] Лок папки для in-place: `.squad/locks/inplace.json`, acquire на approve, release на finalize/cancel, эвикция terminal/2h.
 - [x] Бюджет воркера: research 10 tool-calls, остальные 20, stop-policy и правило батчинга в брифе и промпте.
-- [x] `/mission`: минимальные зависимости, G1 для сбора, параллельный запуск ready-волны, отчёт после каждой волны.
+- [x] `squad_mission`/`squad_plan`: зависимости задаёт план, ready-задачи запускает босс. Отдельной команды `/mission` в репозитории нет — ложное утверждение из 0.9.2 исправлено 17.11.2026.
 - [x] 98 тестов (verdict floor, late audit, lock, assign policy).
 
 **Ожидаемый эффект**
@@ -607,3 +486,22 @@ tests/
 - Независимые задачи: параллельно, а не по одной.
 - Ложные diff из-за второй миссии в папке: исключены локом.
 - Research-воркер: 23 мин → 5–8 мин за счёт бюджета и батчинга.
+
+### 2026-11-17 — Сессия 17 — документация приведена к коду
+
+**Проверено**
+
+- `bun run verify`: typecheck 0, biome 0, 98 pass / 0 fail / 376 expect, 22 файла.
+- 29 регистраций инструментов, миграции 001–009, версия 0.9.2 (`ff6737d`), рабочее дерево чистое до правок.
+
+**Исправлено**
+
+- `README.md` переписан: установка, быстрый старт, 29 инструментов, режимы изоляции, состояния, реальные гейты, данные на диске, ограничения.
+- `docs/PLAN.md` переписан как «архитектура и состояние»: фактические слои, миграции, контракты, гейты, тесты; оценки сроков и нереализованные механизмы убраны в §13.
+- Убраны ложные утверждения: `/mission` (команды в репозитории нет), `report.status` маппится в статус задачи (не маппится), конфиг `maxRework/softWarnPct/hardLimitUsd` читается (не читается), миграции 001–008 (на деле 001–009).
+- `DEVLOG`: строка статуса M0/M7 обновлена, исторический листинг структуры 0.7.0 удалён, актуальная структура — в README.
+- `CHANGELOG` 0.9.2: удалён пункт про `/mission`.
+
+**Не трогал**
+
+- Код и поведение плагина: изменения только в документации.

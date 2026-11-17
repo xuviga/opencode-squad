@@ -6,7 +6,6 @@
 - **Late false-pass guard**: if a second-review audit fails a task whose dependents are already integrated, the task stays integrated and the mission becomes `failed` (event `audit.late_false_pass`) instead of corrupting a shipped chain.
 - **In-place folder lock**: `.squad/locks/inplace.json` gives one in-place mission exclusive ownership of a directory; approve acquires, finalize/cancel release, terminal or 2h-stale holders are evicted.
 - **Worker budget**: briefs carry `tool_call_budget` (research 10, others 20), a stop policy and a research batching rule; the prompt states the hard budget.
-- **Mission command**: `/mission` now plans minimal dependency edges (independent tasks run in parallel), prefers G1 for collection, starts all ready tasks per wave with parallel `squad_wait`, and reports progress per wave.
 - 98 tests.
 
 ## 0.9.1 — 2026-11-14

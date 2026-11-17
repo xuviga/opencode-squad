@@ -1,546 +1,404 @@
-# SQUAD — универсальный мультиагентный плагин для OpenCode
+# SQUAD — архитектура и состояние
 
-> Версия плана: **0.3** · 14.11.2026
+> Документ: **1.0** · 17.11.2026
+> Код: **0.9.2** (`ff6737d`, master)
 > Платформа: **OpenCode 2.3.0** · `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Статус: M0.0 ✅ · M0 server-side ✅ · M0 TUI code ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 ✅ · M5 core ✅ · integration gate ✅; TUI live/M6 universal впереди
-> Изменения 0.3: §3 — проверенный API 2.3.0 и правила promise/effect; §7 — статусы `blocked/failed/cancelled`; §10 — per-session ledger и формула оценки; §11 — blind-изоляция; §15 — M0.0 probe; §16–18 — security/migration/API drift.
+> Проверка: `bun run verify` — typecheck, biome, **98 тестов в 22 файлах**, 0 fail.
 
 ---
 
-## 0. Решения владельца (зафиксировано)
+## 0. Статус
 
-| # | Решение | Следствие для архитектуры |
+| Этап | Статус | Что в коде |
 |---|---|---|
-| 1 | **Универсал с первой версии** | нет деления «код / не-код»; ядро — абстракция «работа» + реестр возможностей |
-| 2 | **Бюджет не ограничен** | нет hard stop по умолчанию; вместо потолка — радар аномалий, телеметрия и kill switch |
-| 3 | **План утверждает человек** | автономность L1: босс обязан провести план через гейт подтверждения |
-| 4 | **TUI-панель сразу** | панель входит в M0/M1, а не в конец |
-| 5 | **Модель — DeepSeek с уровнями мышления** | штат использует `variant: none\|low\|high\|max` как «грейд» сотрудника |
-| 6 | **«Убийца всего»** | полноценный охват задач, динамические роли, автоматический обзор возможностей |
-| 7 | **Целевая платформа — OpenCode 2.3.0** | API строится на `@opencode/plugin@2.3.0` (promise), версии пакетов фиксируются exact; legacy `@opencode-ai/plugin@1.x` не используется |
+| M0.0 capability probe | ✅ | `squad_probe`, standalone probe, interrupt probe |
+| M0 каркас, БД, plan gate | ✅ | `src/index.ts`, SQLite 001, `squad_mission/plan/budget`, RPC |
+| M1 найм и работа | ✅ | `squad_hire/assign/wait/check`, ledger, personas |
+| M2 слепая ревизия | ✅ | `squad_review/verdict`, rework, `squad_report` |
+| M3 HR | ✅ | `squad_appraise/fire/scorecard/career`, blacklist |
+| M4 worktree, DAG, интеграция | ✅ | worktree, зависимости, `squad_integrate/finalize` |
+| M5 споры и аудит | ✅ | `squad_dispute/audit`, арбитр, process auditor |
+| M6 классы и медиа | ✅ | 10 шаблонов, capabilities, `squad_image/preview/look` |
+| M7 закалка | ✅ 0.8–0.9.2 | gc, split store, CI, in-place, snapshot-diff, late false-pass, lock |
+| Release tag | ❌ | тега и release notes нет |
+
+29 инструментов. Тесты: 22 файла, 98 кейсов. CI: `.github/workflows/ci.yml`.
 
 ---
 
-## 1. Одной фразой
+## 1. Границы
 
-Пользователь ставит задачу. **Босс** разбирает её на работы, **нанимает** сотрудников под каждую работу, **проверяет** результат независимыми ревизорами, **спорит** при расхождении, **хвалит / ругает / увольняет** по итогам и **отчитывается** за миссию.
+**Делает.** Любую задачу, которую можно описать как «вход → работа → артефакт → приёмка»: код, исследование, текст, дизайн, данные, ops, ревизия, планирование, creative, mixed. Планирует, нанимает, изолирует, проверяет, сливает, считает расход и хранит историю.
 
-Ключевой принцип: **организация — это машина состояний, а не промпт.** Модель принимает решения, плагин проверяет переходы, считает расход и хранит последствия.
+**Не делает.**
 
----
-
-## 2. Границы
-
-### Входит (универсал)
-Любая задача, которую можно описать как «вход → работа → артефакт → приёмка»:
-
-| Класс | Примеры | Типовые артефакты |
-|---|---|---|
-| `code` | фича, багфикс, рефакторинг, миграция | файлы, тесты, коммит |
-| `research` | «разберись, как работает X», сравнение библиотек | отчёт, ссылки, вывод |
-| `writing` | документация, статья, ТЗ, письмо | текст, md |
-| `design` | макет, плакат, схема, UI | CDR/PNG/PDF, компоненты |
-| `data` | анализ, очистка, метрики | таблицы, графики, скрипты |
-| `ops` | сборка, деплой, окружение, диагностика | логи, конфиги, статус |
-| `review` | аудит кода/текста/дизайна | вердикт + findings |
-| `planning` | стратегия, декомпозиция, оценка | план, риски |
-| `creative` | генерация изображений, концепты | файлы, промпты |
-| `mixed` | всё, что не влезло в один класс | композитный план |
-
-### Не входит
-- Замена юридической/медицинской/финансовой ответственности человека.
-- Действия, запрещённые хостом (сеть, секреты, права).
-- Гарантия корректности: гарантируется **процесс и доказательства**, не истина.
+- не гарантирует корректность работы — гарантирует процесс, evidence и независимую проверку;
+- не заменяет ответственность человека (юридическую, медицинскую, финансовую);
+- не имеет жёсткого лимита бюджета;
+- не создаёт image-модель и не обходит права хоста.
 
 ---
 
-## 3. Проверенный фундамент (capability audit)
+## 2. Платформа и API
 
-Всё ниже подтверждено **14.11.2026** на живом хосте `opencode v2.3.0` и по типам пакетов `@opencode/plugin@2.3.0` / `@opencode/client@2.3.0`.
+- Promise-API `@opencode/plugin@2.3.0` (`Plugin.define`, `setup(context)`), не Effect.
+- Версии exact: `@opencode/plugin`, `@opencode/client`, `@opencode/schema` — `2.3.0`.
+- `effect` — peerDependency `^4.0.0`, не бандлится.
+- Legacy `@opencode-ai/plugin@1.x` не используется.
 
-> **Контекст:** это API **v2**. Legacy-пакет `@opencode-ai/plugin@1.x` (лежит в глобальном `~/.opencode/node_modules`) не используется: у него другая модель хуков и нет нужных `session.wait`, `generate.decisions`, `tool.transform`.
+Используемые домены:
 
-| Нужно | API | Файл |
-|---|---|---|
-| Создать сессию-сотрудника | `session.create({ parentID, title, agent, model, location, permissions })` | `generated/types.d.ts:4202` |
-| Иерархия босс→сотрудник | `parentID` | `:4204` |
-| Модель + уровень мышления | `model: { id, providerID, variant }` | `:4207-4211` |
-| Поставить задачу | `session.prompt({ sessionID, text, files, delivery, resume })` | `:4283`, `:4322` |
-| Вклиниться в работающего | `delivery: "steer" \| "queue"` | `:4322` |
-| Дождаться | `experimental.session.wait({ sessionID })` | `:4804` |
-| Прервать | `session.interrupt({ sessionID })` | `client.d.ts:254` |
-| Прочитать артефакты | client: `session.context`, `session.diff`, `session.stats`; plugin: `ctx.session.context`, `ctx.vcs.diff`, `ctx.session.get` | `client.d.ts:242,243,268` |
-| Изолировать правки | `worktree.create/remove/refresh` | `client.d.ts:194-196` |
-| Структурное решение босса | `experimental.generate.decisions` — `predicate / choice / score` | `types.d.ts:4884-4924` |
-| Дешёвый вызов без сессии | `experimental.generate.text` | `client.d.ts:282` |
-| Генерация изображений | `experimental.generate.image` | `client.d.ts:285` |
-| Права на сессию | `permissions: [{ action, resource, effect }]` | `types.d.ts:4218` |
-| Хук прав | `permission.hook("evaluate")` | `permission.d.ts` |
-| Свои инструменты | `tool.transform(editor => editor.add(...))` | `tool.d.ts` |
-| Свои слэш-команды | `command.transform(editor => editor.add(...))` | `command.d.ts` |
-| Штат как реальные агенты | `.opencode/agent/*.md` + `agent.reload()` | `agent.d.ts` |
-| События | `event.subscribe({ types })` | `event.d.ts` |
-| Реестр возможностей | `tool.list()`, `skill.list()`, `mcp.*`, `model.list()` | одноимённые домены |
+| Нужно | API |
+|---|---|
+| Создать сессию сотрудника | `session.create({ parentID, title, agent, model, permissions })` |
+| Переместить сессию в worktree | `session.move` + проверка `session.get().location` |
+| Поставить задачу | `session.prompt({ sessionID, text, delivery, skills })` |
+| Дождаться / прервать | `session.wait`, `session.interrupt` |
+| Прочитать результат | `session.context`, `session.get` (cost/tokens), `vcs.diff` |
+| Worktree | `worktree.create/remove` |
+| Свои инструменты | `tool.transform(editor => editor.add(...))` |
+| Права | `permission.assert` в мутирующих инструментах |
+| TUI/RPC | `ctx.rpc.register`, `session.panel`, slash-команда `/squad` |
+| Реестр | `model.list`, `agent.list`, `tool.list`, `skill.list`, `mcp.list`, `plugin.list` |
+| Картинки | `experimental.generate.image` (`engine:"api"`), resvg (`engine:"vector"`) |
 
-Ссылки на строки в таблице — `@opencode/client@2.3.0`, `dist/promise/generated/types.d.ts`; `client.d.ts` — `dist/promise/client.d.ts`.
-
-### 3.1 Правила реализации под 2.3.0
-
-1. **Promise-API, не Effect.** Используем default-export `@opencode/plugin` (`Plugin.define`, `setup(context)`); `@opencode/plugin/effect` — только если понадобится тонкий контроль хуков.
-2. **Версии exact.** `@opencode/plugin@2.3.0`, `@opencode/client@2.3.0`, `@opencode/schema@2.3.0`, `@opencode/protocol@2.3.0`, `@opencode/util@2.3.0`. Обновление — только вместе с хостом и после probe.
-3. **`effect` — peerDependency `^4.0.0`, не бандлить.** Хост подставляет свой runtime; две копии Effect ломают fibers/logger/Schema.
-4. **`experimental.*` — за адаптером `src/runtime/*`.** `session.wait`, `generate.decisions`, `session.stats`, `worktree.refresh` могут измениться; снаружи адаптера — только стабильные типы.
-5. **`session.stats` — проектная статистика, не per-session.** Для ledger сотрудника — `session.get` → `SessionInfo.cost` / `SessionInfo.tokens`. `session.diff` и `session.stats` есть только в client API; в plugin context используем `ctx.vcs.diff` и `ctx.session.get`.
-6. **`agent` transform не умеет `add`.** Новые персоны — только `.opencode/agent/*.md` + `agent.reload()` (как и записано в §5).
-7. **`permission.hook("evaluate")` и `tool.transform(editor.add)` — подтверждены**; на них строятся запреты боссу и регистрация `squad_*`.
-
-Вывод: **полноценная оркестрация достижима внутри одного плагина**, без внешнего сервиса.
+`ctx.vcs.diff({ location })` игнорирует location в plugin context; worktree-diff читается через git (`HEAD^`, working tree, status). `session.wait` не ждёт `session.shell`.
 
 ---
 
-## 4. Универсальность: реестр возможностей (Capability Registry)
+## 3. Слои
 
-Главная причина, по которой «универсальный» не превращается в «обещает всё, умеет ничего»: босс **не фантазирует** о своих возможностях, а читает их из хоста при старте миссии.
-
+```text
+src/index.ts              Plugin.define: 29 регистраций, RPC, in-place lock
+src/tools/*               29 инструментов (namespace squad)
+src/db/schema.ts          миграции 001–009
+src/db/model.ts           типы, статусы, row->model
+src/db/store.ts           фасад SquadStore + repositories/*
+src/db/repositories/      missions, tasks, staff, ledger, disputes, audits, events
+src/runtime/              hire, assign-policy, snapshot, diff, integrate, commit,
+                          evidence, gc, worktree, git, probe, messages, images,
+                          preview, paths, inplace-lock
+src/plan.ts               MissionPlan + валидация
+src/classes.ts            10 шаблонов классов
+src/personas.ts           14 персон, грейды, permissions
+src/capabilities.ts       skill:/mcp:/tool: резолв
+src/report.ts             Report + парсер
+src/verdict.ts            Verdict + правила pass/fail
+src/ruling.ts             Ruling арбитра + парсер
+src/process-audit.ts      process audit + парсер
+src/rpc.ts                SquadRpc state/plan
+src/tui.tsx               /squad, панель, approve/reject
+.opencode/agents/         squad-reviewer, squad-arbiter, squad-auditor (no tools)
+tests/                    22 файла, 98 тестов
 ```
-CapabilityRegistry (обновляется на старте миссии и при reload)
-├── tools:      имя, описание, схема входа, какие права нужны
-├── skills:     id, описание (frontmatter SKILL.md)
-├── mcp:        сервер, ресурсы, инструменты
-├── models:     provider, id, варианты, цена, контекст
-├── agents:     существующие агенты и их права
-├── worktrees:  доступные изолированные каталоги
-└── env:        ОС, shell, наличие git, node/bun/python
-```
 
-Правило: **босс не может запланировать работу, для которой в реестре нет инструмента.** Если инструмента нет — это отдельная задача класса `ops` («сделай возможным»), а не выдумка.
+### Таблицы SQLite
 
-Это даёт реальную универсальность: поставили новую MCP-ску или скилл — штат автоматически увидел и научился им пользоваться.
+`missions`, `tasks`, `staff`, `events`, `ledger`, `appraisals`, `blacklist`, `disputes`, `dispute_messages`, `audits`, `lessons`.
+
+Миграции:
+
+| # | Что добавляет |
+|---|---|
+| 001 | missions, tasks, staff, events, ledger |
+| 002 | assignment и model-колонки |
+| 003 | reviewer-колонки, review_round |
+| 004 | appraisals, blacklist, fired_at/evidence_ref |
+| 005 | staff.worktree_directory |
+| 006 | disputes, dispute_messages, audits, lessons |
+| 007 | report_captured_at, merged_at, integration_commit |
+| 008 | tasks.capabilities_json |
+| 009 | missions.isolation, tasks.snapshot_directory |
 
 ---
 
-## 5. Организационная модель
+## 4. Состояния
 
-```
-                    ┌──────────────────────────┐
-                    │   ПОЛЬЗОВАТЕЛЬ           │
-                    │   ставит задачу,          │
-                    │   утверждает план (L1)    │
-                    └────────────┬─────────────┘
-                                 ▼
-                    ┌──────────────────────────┐
-                    │   БОСС (orchestrator)    │
-                    │   не пишет код. Только:   │
-                    │   plan/hire/assign/review │
-                    └───┬───────┬───────┬──────┘
-                        │       │       │
-        ┌───────────────┘       │       └──────────────┐
-        ▼                       ▼                      ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│ СОТРУДНИК     │      │ РЕВИЗОР       │      │ АРБИТР        │
-│ своя сессия   │      │ своя сессия   │      │ 3-я модель    │
-│ свой worktree │      │ read-only     │      │ только при    │
-│ свой грейд    │      │ blind review  │      │ споре         │
-└───────┬───────┘      └───────┬───────┘      └───────────────┘
-        │                      │
-        └──────────┬───────────┘
-                   ▼
-          ┌─────────────────┐
-          │ HR / ПАМЯТЬ     │
-          │ SQLite: штат,   │
-          │ скоринг, уроки  │
-          └─────────────────┘
+### Миссия
+
+```text
+draft → plan_gate → staffing → executing → reviewing → integrating → done
+                                   ↑            │
+                                   └─ fail ─────┘
+любой нетерминальный → aborted (squad_cancel)
+нетерминальный → failed (поздний false-pass аудит)
 ```
 
-### Персоны штата
+`planning` объявлен в `MISSION_STATUSES`, но код в него не переводит. `plan submit` работает из `draft/planning/plan_gate`; `approve` — только из `plan_gate`.
 
-| Persona | Что делает | Права | Грейд по умолчанию |
-|---|---|---|---|
-| `architect` | план, декомпозиция, риски | read-only | `pro/high` |
-| `implementer` | пишет код | edit в worktree | `flash/high` |
-| `test-smith` | тесты, проверки | edit в worktree | `flash/high` |
-| `researcher` | ищет в репо/доках/сети | read + websearch | `flash/low` |
-| `designer` | UI, макеты, плакаты | edit в worktree | `pro/high` |
-| `writer` | тексты, документация | edit | `flash/high` |
-| `data-analyst` | анализ, таблицы | edit + shell | `pro/high` |
-| `ops-runner` | сборка, окружение | shell, ограниченный | `flash/high` |
-| `reviewer` | независимая проверка | read-only | `pro/max` |
-| `critic` | адверсариальная атака | read-only | `pro/max` |
-| `integrator` | слияние, финальный гейт | edit в main | `pro/max` |
-| `auditor` | проверка процесса босса | read-only | `flash/high` |
-| `scribe` | отчёты | edit | `flash/low` |
+### Задача
 
-Персоны — не жёсткий список: босс может породить новую роль из шаблона «роль + инструменты + критерий», если в реестре есть чем её вооружить.
+```text
+pending → ready → running → submitted → in_review → integrated
+                     │          ↑           │
+                     │          └─ returned ┘ (rework ≤ 2)
+                     ├→ failed (timeout/crash/prompt failure)
+                     └→ cancelled (abort миссии)
+```
+
+`report.status: done | blocked | failed` валидируется и сохраняется в `report_json`, но **не** меняет статус задачи. Задачу закрывает только вердикт: `pass → integrated`, `fail → returned`. `failed` ставит `wait` при timeout/crash или `assign` при ошибке prompt.
 
 ---
 
-## 6. Модельная политика: DeepSeek + уровни мышления
+## 5. Контракты
 
-Доступно (проверено через `models`):
+### Plan
 
-| Модель | Варианты | Цена вход/выход за 1M |
-|---|---|---|
-| `deepseek/deepseek-flash` | `none`, `low`, `high`, `max` | $0.15 / $0.60 |
-| `deepseek/deepseek-v4-pro` | `none`, `low`, `high`, `max` | $0.66 / $1.98 |
-
-**Грейд = модель + variant.** Это буквально «квалификация сотрудника»:
-
-| Грейд | Модель·variant | Кому |
-|---|---|---|
-| G0 | flash·none | маршрутизация, извлечение, склейка |
-| G1 | flash·low | исследование, мелкие правки |
-| G2 | flash·high | обычная работа |
-| G3 | pro·high | сложный код, дизайн, архитектура |
-| G4 | pro·max | ревизия, арбитраж, критичные решения |
-
-Правила:
-- **Ревизор всегда на грейд выше исполнителя.** Иначе проверка бессмысленна.
-- **Потолок G4:** если исполнитель уже G4, ревизор берётся того же грейда, но с другой моделью/провайдером; если другой модели нет — два независимых ревизора G4.
-- **Босс не экономит на себе в планировании** (pro·high), но рутину отдаёт G0.
-- Повышение/понижение по score меняет грейд — это и есть «карьера».
-- Ограничение по деньгам не ставится (решение владельца), но каждая миссия пишет фактический расход.
-
----
-
-## 7. Жизненный цикл миссии (L1 — план утверждает человек)
-
-```
-draft → planning → PLAN_GATE (человек) → staffing → executing
-                        │                              │
-                   правки/отказ                       ▼
-                                                 reviewing
-                        ┌────────────────────────────┤
-                        │                            │
-                   rework (≤2) ◄── returned     integrating → done
-                        │                            │
-                        └── dispute → arbiter ───────┘
-                                 │
-                          failed | aborted
-```
-
-**PLAN_GATE** обязателен:
-- Босс формирует план: цели, работы, зависимости, роли, грейды, критерии приёмки, ожидаемый расход.
-- Пользователь видит его в TUI/чате и выбирает: `approve` / `edit` / `reject`.
-- До `approve` ни один сотрудник не нанимается и ни один токен не тратится на работу (расход на планирование уже потрачен и показан в гейте).
-- Правки пользователя становятся частью плана (версионируются).
-
-Статусы задачи:
-```
-pending → ready → assigned → running → submitted → in_review
-   │         │          │         │                     ├─ passed → integrated
-   │         │          │         │                     ├─ returned → running (≤2)
-   │         │          │         │                     └─ escalated → dispute
-   │         │          │         ├─ blocked → ready (после снятия блокера)
-   │         │          │         └─ failed → returned | escalated
-   │         │          └─ cancelled (kill switch / abort миссии)
-   └─────────┴─ cancelled
-```
-
-`blocked`, `failed`, `cancelled` — легальные статусы; переходы в них и из них валидируются плагином. `Report.status: blocked | failed` маппится в `blocked` / `failed`, а `session.interrupt` и `/squad stop` — в `cancelled`.
-
-Нелегальный переход отклоняется плагином, не моделью.
-
----
-
-## 8. Протоколы (конверты)
-
-### 8.1 Task Brief (босс → сотрудник)
 ```json
 {
-  "task_id": "t_003",
-  "mission_id": "m_001",
-  "goal": "Починить пагинацию в списке заказов",
-  "class": "code",
-  "context": ["src/orders/list.ts", "ADR-12"],
-  "acceptance": [
-    "unit-тест на страницу 2 проходит",
-    "нет регрессии в соседних тестах",
-    "diff ≤ 150 строк"
-  ],
-  "constraints": { "no_new_deps": true, "style": "existing" },
-  "capabilities": ["read", "edit", "bash(bun test)"],
-  "output_schema": "report_v1"
+  "goal": "…",
+  "tasks": [{
+    "id": "t1", "title": "…", "class": "code", "role": "implementer",
+    "grade": "G2", "acceptance": ["…"], "dependsOn": [], "capabilities": []
+  }],
+  "expectedCostUsd": 0.05,
+  "notes": "…"
 }
 ```
 
-### 8.2 Report (сотрудник → босс)
+Валидация: непустые tasks; уникальные id; `class` из 10 известных; `grade` G0–G4; непустые acceptance; `dependsOn` ссылается только на существующие id; `expectedCostUsd ≥ 0`.
+
+### Task Brief
+
+```json
+{
+  "task_id": "t1", "mission_id": "m1", "goal": "…", "class": "code",
+  "role": "implementer", "grade": "G2", "context": ["path", "ADR"],
+  "acceptance": ["…"],
+  "constraints": { "tool_call_budget": 20, "budget_policy": "…" },
+  "capabilities": ["skill:coreldraw"],
+  "capability_resolution": [],
+  "output_schema": "report_v1",
+  "rework": true, "attempt": 1, "previous_verdict": {}
+}
+```
+
+`rework/attempt/previous_verdict` появляются только при повторной выдаче.
+
+### Report
+
 ```json
 {
   "status": "done | blocked | failed",
   "summary": "…",
-  "artifacts": { "files": ["…"], "commit": "…", "images": ["…"] },
-  "evidence": [{ "command": "bun test orders", "exit": 0, "tail": "…" }],
-  "risks": ["…"],
-  "open_questions": ["…"]
+  "artifacts": { "files": [], "commit": "…", "images": [] },
+  "evidence": [{ "command": "bun test", "exit": 0, "tail": "…" }],
+  "risks": [],
+  "open_questions": []
 }
 ```
 
-### 8.3 Verdict (ревизор → босс)
+Валидируются `status`, непустой `summary`, типы `artifacts/evidence/risks/open_questions`. Парсер берёт последний JSON-объект из последнего assistant-сообщения.
+
+### Verdict
+
 ```json
 {
   "verdict": "pass | fail",
   "severity": "low | medium | high | critical",
-  "findings": [
-    { "id": "F1", "claim": "…", "evidence": "путь:строка", "required_fix": "…" }
-  ],
+  "findings": [{ "id": "F1", "claim": "…", "evidence": "path:line", "required_fix": "…" }],
   "checked": ["diff", "tests", "acceptance"]
 }
 ```
-`fail` без findings с evidence не принимается. `pass` без `checked: diff+tests` не принимается.
 
-### 8.4 Ruling (арбитр)
+Правила:
+
+- `fail` требует severity `high` или `critical` и хотя бы один finding с evidence;
+- `pass` требует класс-зависимый набор `checked`:
+  - worktree: `code/data/ops` → `diff+tests`, остальные → `acceptance+evidence`;
+  - in-place: `code/data/ops` → `diff+acceptance`, остальные → `acceptance+evidence`.
+- Стиль, нейминг, форматирование — `pass` с findings, не `fail`.
+
+### Ruling
+
 ```json
 { "winner": "worker | reviewer | split", "reasoning": "…", "actions": ["…"] }
 ```
 
 ---
 
-## 9. Механизмы «социального» поведения
+## 6. Персоны и грейды
 
-| Действие | Механика | Последствия |
-|---|---|---|
-| **Нанять** | `squad_hire(persona, grade?, scope?)` → `session.create` | запись в штат, грейд фиксируется |
-| **Похвалить** | `squad_appraise(+N, note)` | +score, приоритет в найме, «сотрудник миссии» |
-| **Поругать** | `squad_appraise(-N, note, require_rework)` | −score, обязательная переделка, probation |
-| **Уволить** | `squad_fire(staff_id, reason, evidence_ref)` | сессия удаляется, чёрный список персона+грейд на 30 дней. **Без evidence отклоняется** |
-| **Спорить** | `squad_dispute(open/reply)` | до 2 раундов обмена доказательствами |
-| **Арбитраж** | `squad_dispute(rule)` | третья модель, ruling → урок |
-| **Повысить** | score ≥ 0.85 за 5 задач | грейд +1 |
-| **Понизить** | score ≤ 0.4 | грейд −1; 2 провала подряд → увольнение |
+| Персона | Агент | Доступ | Грейд по умолчанию |
+|---|---|---|---|
+| `architect` | `plan` | read-only | G3 |
+| `implementer` | `build` | shell | G2 |
+| `test-smith` | `build` | shell | G2 |
+| `researcher` | `explore` | read-only | G1 |
+| `designer` | `build` | write | G3 |
+| `writer` | `build` | write | G2 |
+| `data-analyst` | `build` | shell | G3 |
+| `ops-runner` | `build` | shell | G2 |
+| `reviewer` | `squad-reviewer` | read-only | G4 |
+| `critic` | `squad-reviewer` | read-only | G4 |
+| `integrator` | `build` | shell | G4 |
+| `auditor` | `squad-auditor` | read-only | G2 |
+| `arbiter` | `squad-arbiter` | read-only | G4 |
+| `scribe` | `build` | write | G1 |
 
-Скоринг прозрачен:
-```
-score = 0.40*pass@1 + 0.20*(1-rework) + 0.15*(1-dispute_loss)
-      + 0.15*cost_efficiency + 0.10*(1-timeout)
-```
+Permissions: read-only — deny `edit`, `shell`, `subagent`; write — allow `edit`, deny `shell`, `subagent`; shell — allow `edit`, `shell`, deny `subagent`.
 
-`score ∈ [0, 1]`, окно — последние 5 задач сотрудника:
-- `pass@1` — доля задач, принятых с первой ревизии;
-- `rework` — доля задач, вернувшихся в `returned`;
-- `dispute_loss` — доля проигранных арбитражей;
-- `cost_efficiency` — `median(cost по сопоставимым задачам) / cost сотрудника`, клиппинг в `[0, 1]`;
-- `timeout` — доля задач, прерванных по таймауту.
-
-«Провал» для понижения/увольнения — `failed`-задача или `fail`-вердикт без последующего `pass` в той же миссии.
-
----
-
-## 10. Бюджет: без потолка, но с радаром
-
-Решение владельца: **лимита нет**. Поэтому защита строится не на запрете, а на наблюдаемости.
-
-| Механизм | Что делает |
+| Грейд | Модель · variant |
 |---|---|
-| Ledger | пишет каждый шаг: кто, сколько токенов, сколько $, время |
-| Радар аномалий | сигнал, если: расход миссии > 3× медианы похожих; один сотрудник съел > 50%; > 10 ретраев; budget velocity растёт |
-| Мягкие пороги | 70/90% от **ожидаемой** (не жёсткой) оценки плана — предупреждение в TUI |
-| Kill switch | `/squad stop` → `session.interrupt` всем детям, статус `aborted`, отчёт |
-| Аудит трат | отдельный отчёт: $/принятая задача, $/миссия, топ-расточители |
-| Конфиг | `budget.hard_limit_usd: null` по умолчанию; можно включить |
+| G0 | `deepseek-flash` · none |
+| G1 | `deepseek-flash` · low |
+| G2 | `deepseek-flash` · high |
+| G3 | `deepseek-v4-pro` · high |
+| G4 | `deepseek-v4-pro` · max |
 
-**Ledger:** per-session расход — `SessionInfo.cost` и `SessionInfo.tokens` из `session.get`; `session.stats` даёт только проектную агрегацию и для счёта сотрудника не используется.
-
-**Ожидаемая оценка:** `Σ(роль × ожидаемые input/output токены × цена модели) × 1.25` — запас на retry/rework. В PLAN_GATE показываются две цифры: расход на планирование (уже потрачен) и ожидаемая стоимость работы.
-
-**Пороги 70/90 % — предупреждения, не блокировки.** `budget.hard_limit_usd` остаётся `null` по умолчанию; включается только явным решением владельца.
-
-Итог: «безлимит» не означает «вслепую» — оценка видна до старта, факт пишется после.
+Ревизор берётся на грейд выше; при G4 — персона `critic` того же грейда. Повышение/понижение — `squad_career` по score.
 
 ---
 
-## 11. Изоляция и безопасность
+## 7. Изоляция
 
-1. **Босс не имеет `edit`/`write`** — deny в permissions + `permission.hook`.
-2. **Писатель** — свой `worktree`; main недоступен.
-3. **Ревизор** — read-only + **blind**: видит brief, diff, вывод тестов; не видит рассуждений исполнителя. `squad_check` привязан к `task_id` и не отдаёт контекст чужих сессий.
-4. **Анти-сговор:** ревизор всегда на грейд выше; при G4 — другая модель/провайдер или два независимых ревизора.
-5. **Prompt injection:** всё от сотрудника — `untrusted`; в промпте ревизора обрамлено и помечено «данные, не инструкции».
-6. **Секреты:** фильтрация по паттернам до записи в БД и до передачи ревизору.
-7. **Пути:** allowlist на миссию.
-8. **Человек в цикле:** PLAN_GATE, дорогие операции, разрушительные действия.
+### worktree
 
----
+- Требует git-репозиторий; проверка в `squad_mission create` и `hireEmployee`.
+- Hire создаёт worktree для всех, кроме read-only.
+- `session.create` не гарантирует каталог: сессия принудительно перемещается через `session.move`, затем bounded polling `session.get`; несовпадение каталога — fail-closed.
+- `squad_integrate` делает cherry-pick в `main`, пишет `integration.merged`, удаляет worktree.
+- Diff для поздней ревизии читается из integration-коммита.
 
-## 12. Как босс думает
+### none (in-place)
 
-1. **Детерминированный роутер (код, $0).** Класс задачи, шаблон плана, обязательные роли.
-2. **`generate.decisions` (дёшево).** Структурные вопросы: класс, риск, нужен ли архитектор, сколько сотрудников, изоляция, грейды.
-3. **Сессия босса (дорого).** Нестандарт, конфликты, финальное планирование.
-
-Правило: **80% решений — уровень 1–2.** Дорогой уровень включается осознанно и виден в отчёте.
-
----
-
-## 13. TUI-панель (входит в MVP)
-
-```
-SQUAD · m_001  «Починить пагинацию»   ⏸ plan gate
-──────────────────────────────────────────────
-План: 4 работы · роли: impl×2, test, review
-Ожидаемо: ~180k токенов · ~$0.12
-[✓ Approve]  [✎ Edit]  [✗ Reject]
-──────────────────────────────────────────────
-БОСС         planning   pro·high
-├ architect  idle       pro·high   ✓ 3
-├ impl-1     —          flash·high
-├ impl-2     —          flash·high
-├ reviewer-1 —          pro·max
-Споры: 0 · Расход: $0.00
-```
-
-После approve:
-```
-SQUAD · m_001  ██████░░░░ 62%  $0.08 (est $0.12)
-БОСС         running
-├ impl-1     running   t_001 · 7м · 34k
-├ impl-2     idle      ✓ t_002
-├ reviewer-1 reviewing t_002
-├ reviewer-2 —         pro·max
-Споры: 1 (t_002) · Аномалии: нет
-```
-
-Команды: `/squad new|plan|approve|status|staff|budget|stop|report`.
+- Сотрудники работают в каталоге проекта; worktree не создаётся.
+- `squad_assign` снимает снапшот перед стартом: `.squad/snapshots/<mission>/<task>/` (manifest sha256 + копии файлов).
+- Снапшот: skip `.git/.squad/node_modules/dist/build/.next/coverage/target/venv/__pycache__` и др.; файлы >2 МБ и бинарники только помечаются; лимит 5 000 файлов.
+- Diff — added/modified/deleted с построчным patch; бюджет 120 000 символов, заголовки файлов сохраняются всегда, усечённые помечаются.
+- `integrate` помечает задачу merged in place; `finalize`/`audit` не проверяют ancestry.
+- Lock `.squad/locks/inplace.json`: acquire на approve, release на finalize/cancel, эвикция terminal/2h.
+- Параллельные писатели не изолированы.
 
 ---
 
-## 14. Отказы и деградация
+## 8. Гейты и гарантии
 
-| Сбой | Обнаружение | Реакция |
-|---|---|---|
-| Сотрудник завис | нет событий N минут | `steer` → `interrupt` → замена |
-| Мусор в отчёте | невалидный JSON | авто-возврат со схемой ошибки |
-| Ложный `pass` | аудитор + 10% выборочных вторых ревизий | пересмотр, −score ревизору |
-| Вечный `fail` | >2 возвратов без новых findings | замена ревизора / эскалация |
-| Бесконечный спор | лимит раундов | арбитр → человек |
-| Аномальный расход | радар | предупреждение, пауза, запрос подтверждения |
-| Конфликт worktree | merge fail | integrator / перепланирование |
-| Ошибка хоста | `session.execution.failed` | retry с backoff → эскалация |
-
----
-
-## 15. План реализации
-
-> Фактический прогресс на 14.11.2026: M0.0 ✅; M0 server-side ✅ + TUI panel/RPC ✅ + live PTY `/squad` reject/approve ✅; M1 ✅; M2 ✅; M3 ✅; M4 ✅; M5 core ✅; M6 ✅ (research + design live, preview/vision); integration gate ✅; M7 🟡 (TUI live, vector image, chaos crash/duplicate, cancel, auto-commit, API drift, README; release notes). Детали — `docs/DEVLOG.md`.
-
-### M0.0. Capability probe (0.5–1 день)
-- [ ] Probe-плагин на живом хосте 2.3.0: `session.create` с `parentID`, `model.variant`, `permissions`; `session.prompt`; `session.wait`; `session.interrupt`; `session.context` / `session.diff`; `worktree.create/remove/refresh`; `experimental.generate.decisions`.
-- **Приёмка:** probe стартует, создаёт дочернюю сессию, получает валидный ответ, корректно прерывает её; все вызовы проходят с типами `@opencode/plugin@2.3.0` / `@opencode/client@2.3.0`.
-
-### M0. Каркас + TUI + план-гейт (4–5 дней)
-- [ ] `package.json` (exact pin 2.3.0, `effect` peer), `src/index.ts`, `src/v2.ts`, `src/tui-v2.ts`, `src/config.ts`, `src/runtime/*`
-- [ ] SQLite + миграция 001 (missions, tasks, staff, events, ledger)
-- [ ] Capability Registry (tools/skills/mcp/models)
-- [ ] `squad_mission`, `squad_plan`, `squad_budget`
-- [ ] PLAN_GATE: план → approve/edit/reject
-- [ ] TUI-панель: план, штат, расход
-- [ ] `/squad new|plan|approve|status|stop`
-- **Приёмка:** задача → план → утверждение → миссия в состоянии `staffing`; всё переживает перезапуск; панель показывает план и расход.
-
-### M1. Найм и работа (4–5 дней)
-- [ ] генерация `.opencode/agent/*.md` для персон + `agent.reload()`
-- [ ] `squad_hire` (сессия + permissions + грейд)
-- [ ] `squad_assign` + brief + валидация отчёта
-- [ ] `squad_wait`, `squad_check` (report/diff, stats — проектная агрегация)
-- [ ] ledger + радар аномалий
-- **Приёмка:** один сотрудник выполняет задачу; отчёт валиден; расход записан; зависший сотрудник заменяется.
-
-### M2. Ревизия и возврат (4 дня)
-- [ ] `squad_review` (авто-найм ревизора выше грейдом, blind)
-- [ ] `squad_verdict` + валидация
-- [ ] rework ≤2 → эскалация
-- [ ] `squad_report`
-- **Приёмка:** сломанный артефакт получает `fail` с evidence; после возврата `pass`; отчёт содержит оба раунда.
-
-### M3. HR и карьера (3–4 дня)
-- [ ] scorecards, appraise, fire с обязательным основанием
-- [ ] переиспользование штата между миссиями
-- [ ] lessons + поиск
-- **Приёмка:** 2 провала → понижение; увольнение без evidence отклоняется.
-
-### M4. Параллель и изоляция (5 дней)
-- [ ] DAG задач
-- [ ] worktree на писателя, слияние интегратором
-- [ ] параллельный найм до лимита
-- [ ] глобальный гейт перед `integrated`
-- **Приёмка:** 3 задачи параллельно; конфликт обнаружен и решён.
-
-### M5. Споры, арбитр, аудитор (4 дня)
-- [ ] dispute open/reply/rule
-- [ ] арбитр на pro·max
-- [ ] аудитор + выборочные вторые ревизии
-- **Приёмка:** искусственный спор разрешается ruling'ом с обоснованием.
-
-### M6. Универсальные классы задач (5–6 дней)
-- [x] шаблоны планов для `research/writing/design/data/ops/creative` (+ code/review/planning/mixed)
-- [x] подключение скиллов и MCP к ролям (`skill:`, `mcp:`, `tool:` capabilities + guidance)
-- [x] `experimental.generate.image` для дизайна (`squad_image`)
-- [x] примеры на каждом классе (unit: все 10 шаблонов; live: research mission `m_e6049e51`)
-- **Приёмка:** по одной реальной задаче каждого класса, все с ревизией. — research `m_e6049e51` ✅; design `m_2e72a622` ✅ (DeepSeek text→SVG + `squad_preview`/`squad_look` vision); остальные классы покрыты шаблонами/юнитами.
-
-### M7. Закалка (4–6 дней)
-- [x] `squad_cancel` + API drift test + contract test поверхности инструментов
-- [x] README и журнал разработки
-- [x] TUI live PTY (`/squad`, reject/approve), `squad_image engine:"vector"`, chaos crash/duplicate
-- [ ] финальный релиз и оставшиеся chaos-сценарии
-- **Приёмка:** ни один chaos-сценарий не оставляет миссию подвешенной.
-
-**Итого:** ~5–6 недель + 1 день на probe. Рабочая контора (M0–M2) — ~2 недели.
-
----
-
-## 16. Тестирование
-
-| Уровень | Что |
+| Гейт | Реализация |
 |---|---|
-| Unit | переходы состояний, score, ledger, валидация конвертов |
-| Integration | фейковый runtime: create/prompt/wait/interrupt, вердикты, споры |
-| Contract | схемы инструментов и JSON-конвертов |
-| E2E | реальный OpenCode: bugfix, research, writing, design |
-| Chaos | зависание, мусор, ложный pass, двойной возврат, обрыв, аномальный расход |
-| Security | prompt injection, утечка секретов, escape путей, cross-session чтение |
-| Migration | миграции SQLite 001→N, откат, совместимость со старыми миссиями |
-| API drift | pin 2.3.0, golden-типы, capability probe на старте |
-| TUI | рендер панели, keybindings, approve/edit/reject, перезапуск |
-| Cost | 10 миссий с замером $/принятая задача |
+| Plan gate | hire только в `staffing/executing/reviewing`; до approve нанять нельзя |
+| Слепая ревизия | отдельный no-tools агент, грейд +1, только brief/report/diff/images |
+| Класс-зависимые проверки | `requiredChecks` в `src/verdict.ts` |
+| Severity floor | fail только high/critical + finding |
+| Rework | `attempts > 2` → отказ в `assignTask` |
+| Свежесть отчёта | `report_captured_at >= assigned_at`, иначе review/check отказывают |
+| Чистый main | `integrate` отказывается при грязном working tree |
+| Конфликт | `abort` — main чистый; `theirs` — сторона воркера, strategy в результате |
+| Удаление worktree | после integrate, cancel, finalize |
+| Evidence-гейт | `taskEvidence`: для worktree проверяет `merged_at` и ancestry, in-place пропускает; до вызова модели |
+| Audit quota | finalize: `max(1, ceil(10% tasks))` вторых ревизий |
+| Поздний false-pass | задача остаётся integrated, миссия `failed`, событие `audit.late_false_pass` |
+| Авто-коммит | `squad_wait` коммитит грязный worktree; ошибка → task `failed` |
+| Бюджет воркера | research 10 tool-calls, остальные 20; stop-policy в brief и промпте |
+| In-place lock | один владелец папки; 2h/terminal эвикция |
 
 ---
 
-## 17. Метрики успеха
+## 9. Бюджет и ledger
 
-- `pass@1` ≥ 60% на типовых задачах.
-- Доля миссий с вмешательством человека ≤ 20% (не считая PLAN_GATE).
-- Ноль «подвешенных» миссий после chaos.
-- 100% увольнений и понижений имеют записанное основание.
-- Расход на принятую задачу предсказуем: факт ≤ 1.5× оценки плана в 80% миссий.
-- Ложный `pass` ≤ 5% на выборочных вторых ревизиях.
-- Доля миссий со спором ≤ 15%.
+- Ledger пишет per-session `cost`, `tokens.input`, `tokens.output`, staff, provider/model/variant.
+- Источник — `session.get` (`SessionInfo.cost/tokens`), не проектный `session.stats`.
+- `squad_budget`: expected из плана, actual из ledger; `ratio = actual/expected`.
+- Предупреждения: ≥70 %, ≥90 %, >3× (аномалия).
+- Жёсткого лимита нет: `hardLimitUsd` объявлен, но не читается.
+- `expectedCostUsd` задаёт план; фактический расход считается по ledger.
 
 ---
 
-## 18. Риски
+## 10. TUI и RPC
 
-| Риск | Митигация |
+- Slash-команда `/squad`, слот `session.panel`, панель `squad.panel`.
+- Панель: миссия/статус, plan version, cost, tasks (до 8), staff, audits, budget anomaly.
+- Клавиши: `a` approve, `r` reject, `escape` close.
+- Polling `state` каждые 1.5 с.
+- RPC `squad.state` / `squad.plan`; JSON санитизируется roundtrip, чтобы не падать на `undefined`.
+- TUI-часть грузится из `cli.json`, server-часть — из `opencode.json`.
+
+---
+
+## 11. Классы, capabilities, медиа
+
+10 классов: `code`, `research`, `writing`, `design`, `data`, `ops`, `review`, `planning`, `creative`, `mixed`.
+
+Шаблоны (по 2 шага, кроме mixed — 1):
+
+| Класс | Шаги |
 |---|---|
-| `experimental.*` API изменится | изоляция в `src/runtime/*`, fallback |
-| Расход улетает (лимита нет) | радар, пауза, подтверждение, аудит |
-| Босс «резиновый» | pass только от ревизора, аудитор, выборочные ревизии |
-| Ревизор-саботажник | лимит возвратов, замена, score |
-| Контекст босса переполняется | босс видит сводки, не сырые диффы |
-| Гонки событий | идемпотентность по `sessionID+taskID` |
-| Prompt injection из артефактов | untrusted-обёртка, запрет инструкций в данных |
-| «Универсал» расползается | Capability Registry: нет инструмента — нет работы |
-| Две копии Effect ломают runtime | `effect` — peerDependency, не бандлить |
-| Версии 2.3.0 разъезжаются между хостом и пакетами | exact pin + capability probe |
-| Cross-session чтение обходит blind | привязка `squad_check` к `task_id`, запрет чужих сессий |
-| TUI API меняется | адаптер `src/tui-v2.ts`, fallback на чат-команды |
+| code | impl → verify |
+| research | collect → synthesize |
+| writing | outline → draft |
+| design | concept → produce |
+| data | extract → analyze |
+| ops | prepare → execute |
+| review | inspect → report |
+| planning | map → schedule |
+| creative | explore → select |
+| mixed | deliver |
+
+Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `squad_capabilities` резолвит доступность; `squad_assign` добавляет guidance в brief и прикрепляет доступные skills к `session.prompt`.
+
+Медиа:
+
+- `squad_image engine:"api"` — `experimental.generate.image`, нужна image-модель;
+- `squad_image engine:"vector"` — текстовая модель генерирует self-contained SVG, resvg делает PNG;
+- `squad_preview` — SVG → PNG локально;
+- `squad_look` — image attachment в дочернюю сессию DeepSeek;
+- `squad_review`/`squad_audit` прикрепляют PNG из отчёта или рендерят preview SVG.
 
 ---
 
-## 19. Ближайший шаг
+## 12. Тесты
 
-**M0.0** — capability probe на 2.3.0: подтвердить create/prompt/wait/interrupt/context/diff/worktree/decisions на живом хосте.
+22 файла, 98 тестов:
 
-**M0** — каркас, БД, реестр возможностей, план-гейт, TUI-панель, `/squad`.
-Результат: можно создать миссию, получить план, утвердить его и увидеть это в панели.
+| Группа | Файлы |
+|---|---|
+| Планирование | `plan`, `classes`, `assign-policy` |
+| Хранилище | `store`, `store-lifecycle` |
+| Исполнение | `wait`, `commit`, `diff`, `snapshot`, `messages`, `report` |
+| Ревизия | `verdict`, `ruling`, `process-audit` |
+| Интеграция | `integrate`, `evidence`, `gc`, `inplace-lock` |
+| Поведение | `chaos` |
+| Контракты | `api-drift`, `tui`, `preview` |
 
-Дальше **M1** — первый наём и первая выполненная работа.
+`bun run verify`: typecheck → biome → test. CI повторяет это на Ubuntu с `--frozen-lockfile`.
+
+---
+
+## 13. Не реализовано
+
+Честный список того, что старый план обещал, а код не содержит:
+
+1. **`/mission`** — команды в репозитории нет; заявление в CHANGELOG 0.9.2 удалено. Планирование идёт через `squad_mission/plan` (решения принимает модель).
+2. **Детерминированный роутер и `generate.decisions`** — не используются; декомпозиция полностью на боссе.
+3. **`steer`** — `delivery:"steer"` не применяется, только `"queue"`.
+4. **Жёсткий лимит бюджета** — `hardLimitUsd` не читается.
+5. **Конфиг `maxRework`/`softWarnPct`** — не читается; значения зашиты.
+6. **Секреты, allowlist путей, обёртка prompt injection** — фильтрации нет; blind-ревизия ограничена промптом и отсутствием инструментов.
+7. **Автоматический janitor** — только явный `squad_gc`.
+8. **`report.status` → статус задачи** — не маппится.
+9. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
+10. **Release tag/release notes** — отсутствуют.
+11. **Метрики успеха** (pass@1 ≥60 %, доля споров, $/задача) — не собираются автоматически; scorecard считает только по своим задачам и ledger.
+12. **Расписание process audit и бюджет в TUI** — не реализованы.
+
+---
+
+## 14. Ближайшие шаги
+
+1. Решить судьбу `report.status`: либо маппить `blocked/failed` в статус задачи, либо убрать из схемы.
+2. Подключить или удалить мёртвый конфиг: `maxRework`, `softWarnPct`, `hardLimitUsd`.
+3. Поставить тег `v0.9.2` и release notes.
+4. Опционально: image API при валидной image-модели; расписание process audit.
+5. Держать `README`/`PLAN`/`DEVLOG` в синхроне с `bun run verify` и фактическим набором инструментов.
+
+---
+
+## 15. Документы
+
+| Файл | Роль |
+|---|---|
+| `README.md` | установка, быстрый старт, инструменты, гарантии, ограничения |
+| `docs/PLAN.md` | этот документ: архитектура, контракты, состояние, пробелы |
+| `docs/DEVLOG.md` | хронология разработки и живые прогоны |
+| `CHANGELOG.md` | версии |
