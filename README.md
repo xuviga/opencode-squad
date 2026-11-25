@@ -9,6 +9,20 @@
 
 **0.9.3** · 29 инструментов · 107 тестов в 23 файлах · `bun run verify` зелёный (25.11.2026).
 
+## Why SQUAD
+
+Три боли, из-за которых появился оркестратор, и три механизма, которые их закрывают.
+
+**1. Ревизия, которая ставит галочки.** Ревьюер, который видит рассуждения исполнителя и обязан «одобрить», подтверждает намерение, а не результат; это обсуждают не первый раз: [HN, 48949465](https://news.ycombinator.com/item?id=48949465) и [HN, 44153082](https://news.ycombinator.com/item?id=44153082). → **Слепая ревизия.** `squad_review` поднимает отдельного ревизора на грейд выше и отдаёт ему только Task Brief, отчёт воркера и diff; `src/verdict.ts` не принимает `fail` без severity `high`/`critical` и хотя бы одного finding с evidence, а `pass` обязан перечислить проверки по классу задачи. Файлы: `src/tools/review.ts`, `src/verdict.ts`.
+
+**2. Агенты, которые плодят агентов.** Дочерние сессии уходят в рекурсию и жгут бюджет без счёта: [opencode#18100](https://github.com/anomalyco/opencode/issues/18100) и [HN, 45236830](https://news.ycombinator.com/item?id=45236830). → **Запрет субагентов и бюджет в brief.** `personaPermissions` в `src/personas.ts` выдаёт `subagent: * deny` каждой персоне, независимо от доступа; `src/tools/assign.ts` кладёт в промпт жёсткий лимит tool-calls и требует при исчерпании вернуть `status=blocked` с частичными evidence вместо продолжения. Файлы: `src/personas.ts`, `src/tools/assign.ts`.
+
+**3. «Worktree» путают с песочницей.** Изоляцию каталогов принимают за изоляцию прав: [HN, 49235472](https://news.ycombinator.com/item?id=49235472) и [stop-using-opencode](https://wren.wtf/shower-thoughts/stop-using-opencode/). → **Доказательство родства коммитов и общий откат.** `src/runtime/evidence.ts` проверяет `git merge-base --is-ancestor` для каждого integration-коммита и валит задачу детерминированно, без трат на модель; `src/runtime/integrate.ts` коммитит в `main` только через cherry-pick на чистом дереве, а `src/tools/integrate.ts` при падении любого cherry-pick откатывает весь батч к HEAD до вызова и снимает отметки о слиянии, оставляя worktree для повтора (событие `integration.rollback` пишет `src/db/repositories/tasks.ts`). Файлы: `src/runtime/evidence.ts`, `src/runtime/integrate.ts`, `src/tools/integrate.ts`.
+
+Почему это не гигиена, а необходимость: сбои верификации в мульти-агентных системах разобраны отдельно — [arXiv:2503.13657](https://arxiv.org/abs/2503.13657).
+
+**Чего мы не делаем.** Мы не называем worktree песочницей. Worktree изолирует каталог и коммиты, поэтому параллельные писатели не затирают друг друга и ревизор видит честный diff, — но права процесса он не меняет: воркер по-прежнему читает `~/.aws` и ходит в сеть. Границу безопасности задают permissions персоны и окружение, а не git. Настоящая песочница — это контейнер или виртуалка, и SQUAD их не поднимает; если задача требует изоляции прав, её нужно решать снаружи.
+
 ## Требования
 
 - OpenCode `2.4.1`;
