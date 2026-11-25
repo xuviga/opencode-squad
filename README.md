@@ -1,13 +1,13 @@
 # SQUAD
 
 [![CI](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml/badge.svg)](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.9.7-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.10.0-blue.svg)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![OpenCode](https://img.shields.io/badge/OpenCode-2.4.1-000000.svg)](https://opencode.ai)
 
 Мульти-агентный оркестратор для **OpenCode 2.4.1**: босс планирует миссию, нанимает сотрудников в дочерние сессии, проводит слепую ревизию, разрешает споры через арбитра и сливает работу в `main` через изолированные worktree. Организация — машина состояний в SQLite; переходы валидирует плагин, а не модель.
 
-**0.9.7** · 29 инструментов · 120 тестов в 24 файлах · `bun run verify` зелёный (25.11.2026).
+**0.10.0** · 29 инструментов · 127 тестов в 24 файлах · `bun run verify` зелёный (25.11.2026).
 
 ## Why SQUAD
 
@@ -132,7 +132,7 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 
 | Инструмент | Что делает |
 |---|---|
-| `squad_image` | `engine:"api"` — `experimental.generate.image`; `engine:"vector"` — SVG от текстовой модели → PNG через resvg |
+| `squad_image` | `engine:"auto"` (по умолчанию) — image-модель, если она настроена, иначе SVG→PNG через текстовую модель; `"api"` требует image-модель; `"vector"` — всегда SVG + resvg |
 | `squad_preview` | локальный SVG → PNG (resvg), без image-модели |
 | `squad_look` | отправляет изображение vision-модели и возвращает ответ + cost |
 
@@ -166,6 +166,31 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 - **Проверка worktree**: `squad_mission create` с `isolation:"worktree"` сначала создаёт и удаляет пробный worktree; если хост не умеет — миссия не создаётся, а `squad_status` отдаёт `isolation.worktreeUsable`.
 - **Метрики**: `store.metrics()` и `squad_report` считают pass@1, rework rate, долю падений, споры, аудиты и стоимость на интегрированную задачу — всё выводимо из задач и ledger.
 - **Живучесть БД**: одна SQLite-ручка на проект, не закрывается при dispose, поэтому reload плагина не рвёт вызовы в полёте.
+- **Lock записи**: в in-place миссии `squad_assign` отказывает, если `paths` новой задачи пересекаются с `paths` задачи в `assigned/running`; `squad_tasks` показывает активные lock'и.
+- **Конфиг из файла**: `.squad/config.json` (maxRework, softWarnPct, hardLimitUsd, staleAfterMinutes, gcIntervalMinutes, gcAutoAbort, grades) мержится с дефолтами; битый файл — громкая ошибка, а не тихий откат.
+- **Планировщик gc**: каждые `gcIntervalMinutes` сканирует зависшие миссии и пишет события `gc.stale`; авто-аборт только при `gcAutoAbort: true`.
+- **TUI**: панель показывает pass@1, rework и стоимость на интегрированную задачу из `tuiState.metrics`.
+
+## Конфигурация
+
+`<проект>/.squad/config.json` — опциональный, мержится с дефолтами:
+
+```jsonc
+{
+  "maxRework": 2,              // сколько раз задачу можно вернуть
+  "softWarnPct": [70, 90],     // пороги бюджетного радара
+  "hardLimitUsd": null,        // жёсткий лимит: блокирует новый assign
+  "staleAfterMinutes": 120,    // порог зависшей миссии
+  "gcIntervalMinutes": 60,     // 0 отключает планировщик
+  "gcAutoAbort": false,        // true — планировщик сам абортит зависшие
+  "grades": {                  // частичное переопределение моделей по грейдам
+    "G2": { "providerID": "deepseek", "modelID": "deepseek-flash", "variant": "high" }
+  }
+}
+```
+
+Ошибка в файле останавливает загрузку плагина с указанием поля — тихо работать
+на дефолтах после опечатки хуже, чем не загрузиться.
 
 ## Данные на диске
 

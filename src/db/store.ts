@@ -265,6 +265,10 @@ export class SquadStore {
     return this.tasks.listDependents(missionID, taskID);
   }
 
+  listLocks(missionID: string) {
+    return this.tasks.listLocks(missionID);
+  }
+
   // Events
   addEvent(
     missionIDValue: string | null,

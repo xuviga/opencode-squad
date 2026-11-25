@@ -23,9 +23,22 @@ type SquadState = {
   tasks: SquadTask[];
   staff: Array<{ id: string; persona: string; grade: string; status: string }>;
   budget: { warnings?: string[]; anomaly?: boolean };
+  metrics?: {
+    passAt1: number | null;
+    reworkRate: number | null;
+    costPerIntegratedTaskUsd: number | null;
+  };
   audits: unknown[];
   disputes: unknown[];
 };
+
+function percent(value: number | null | undefined): string {
+  return value === null || value === undefined ? "n/a" : `${Math.round(value * 100)}%`;
+}
+
+function money(value: number | null | undefined): string {
+  return value === null || value === undefined ? "n/a" : `$${value.toFixed(4)}`;
+}
 
 export function SquadPanel(props: { panel: PanelInput }) {
   const context = usePlugin();
@@ -109,6 +122,12 @@ export function SquadPanel(props: { panel: PanelInput }) {
         <text fg={context.theme.text.muted}>
           tasks {state()!.tasks.length} · staff {state()!.staff.length} · audits {state()!.audits.length}
         </text>
+        <Show when={state()!.metrics}>
+          <text fg={context.theme.text.muted}>
+            pass@1 {percent(state()!.metrics!.passAt1)} · rework {percent(state()!.metrics!.reworkRate)} ·{" "}
+            {money(state()!.metrics!.costPerIntegratedTaskUsd)}/task
+          </text>
+        </Show>
         <Show when={state()!.budget.anomaly}>
           <text fg={context.theme.text.feedback.warning.base}>budget anomaly detected</text>
         </Show>

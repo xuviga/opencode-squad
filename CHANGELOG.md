@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 — 2026-11-25
+
+- **Per-task write locks**: in `isolation:"none"`, `squad_assign` refuses an assignment whose `paths` overlap a task in `assigned`/`running`. Overlap covers exact files, `docs/` prefixes and globs (conservative: globs compare literal prefixes). `squad_tasks` exposes active locks.
+- **Configuration file**: `.squad/config.json` merges over `DEFAULT_CONFIG`; a broken file aborts plugin load with the field name instead of silently running on defaults. Grades can be overridden per grade.
+- **Scheduled janitor**: every `gcIntervalMinutes` the plugin scans for stale missions, writes `gc.stale` events and logs a warning; it aborts only when `gcAutoAbort: true` (`gc.auto_abort`). `0` disables it.
+- **TUI metrics**: the `/squad` panel prints pass@1, rework rate and cost per integrated task from `tuiState.metrics`.
+- **Image auto engine**: `squad_image` defaults to `engine:"auto"` — an image model when configured, the SVG→PNG vector path otherwise (and as a fallback when the image model fails), with `fallback_reason` in the payload. `"api"` now fails with a message that names the alternative.
+- 127 tests (config merge and validation, overlap detection and assign refusal, janitor scan).
+
 ## 0.9.7 — 2026-11-25
 
 - **The report moves the task** (issue #2): `squad_check` now applies `report.status`. `blocked` moves the task to `blocked` without spending a rework attempt and without starting a review; `failed` moves it to `failed`; `done` keeps the old path to `submitted`. A blocked task is re-issued with `squad_assign`, and the worker prompt says the block did not cost an attempt.

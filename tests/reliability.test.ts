@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DEFAULT_CONFIG, loadSquadConfig } from "../src/config";
 import { acquireSquadDb, closeSharedHandles, openSquadDb, sharedHandleCount } from "../src/db/index";
 import { SquadStore } from "../src/db/store";
+import { scanStale } from "../src/runtime/janitor";
 import {
   attributeInPlace,
+  overlappingPatterns,
   pathMatches,
   partitionDiff,
+  patternsOverlap,
   scopeViolations,
 } from "../src/runtime/scope";
 import { probeWorktree, resetWorktreeProbeCache } from "../src/runtime/worktree";
@@ -288,5 +292,135 @@ describe("task paths", () => {
       ],
     });
     expect(store.requireTask(mission.id, "t1").paths).toEqual(["docs/", "README.md"]);
+  });
+});
+
+describe("config file", () => {
+  let directory: string;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), "squad-config-"));
+  });
+
+  afterEach(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  function writeConfig(value: unknown) {
+    mkdirSync(join(directory, ".squad"), { recursive: true });
+    writeFileSync(join(directory, ".squad", "config.json"), JSON.stringify(value), "utf8");
+  }
+
+  test("missing file keeps the defaults", () => {
+    expect(loadSquadConfig(directory)).toEqual(DEFAULT_CONFIG);
+  });
+
+  test("partial file merges over defaults and keeps unset grades", () => {
+    writeConfig({ maxRework: 1, hardLimitUsd: 0.5, grades: { G2: { providerID: "x", modelID: "y", variant: "z" } } });
+    const config = loadSquadConfig(directory);
+    expect(config.maxRework).toBe(1);
+    expect(config.hardLimitUsd).toBe(0.5);
+    expect(config.grades.G2).toEqual({ providerID: "x", modelID: "y", variant: "z" });
+    expect(config.grades.G4).toEqual(DEFAULT_CONFIG.grades.G4);
+    expect(config.gcIntervalMinutes).toBe(DEFAULT_CONFIG.gcIntervalMinutes);
+  });
+
+  test("a typo fails loudly instead of silently using defaults", () => {
+    mkdirSync(join(directory, ".squad"), { recursive: true });
+    writeFileSync(join(directory, ".squad", "config.json"), "{ not json", "utf8");
+    expect(() => loadSquadConfig(directory)).toThrow("cannot parse");
+    writeConfig({ softWarnPct: [90, 70] });
+    expect(() => loadSquadConfig(directory)).toThrow("ascending");
+  });
+});
+
+describe("write locks", () => {
+  let directory: string;
+  let db: Database;
+  let store: SquadStore;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), "squad-locks-"));
+    db = openSquadDb(directory);
+    store = new SquadStore(db);
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  test("overlap detection covers prefixes, globs and exact paths", () => {
+    expect(patternsOverlap("docs/", "docs/a.md")).toBe(true);
+    expect(patternsOverlap("docs/", "src/")).toBe(false);
+    expect(patternsOverlap("src/**/*.ts", "src/a/b.ts")).toBe(true);
+    expect(patternsOverlap("src/**/*.ts", "docs/a.md")).toBe(false);
+    expect(overlappingPatterns(["docs/"], ["docs/a.md", "README.md"])).toHaveLength(1);
+  });
+
+  test("assign refuses an overlapping writer and allows a disjoint one", () => {
+    const mission = store.createMission("locks", "", "none");
+    store.submitPlan(mission.id, {
+      goal: "locks",
+      tasks: [
+        { id: "a", title: "a", class: "writing", role: "writer", grade: "G1", acceptance: ["ok"], paths: ["docs/"] },
+        { id: "b", title: "b", class: "writing", role: "writer", grade: "G1", acceptance: ["ok"], paths: ["docs/deep.md"] },
+        { id: "c", title: "c", class: "writing", role: "writer", grade: "G1", acceptance: ["ok"], paths: ["src/"] },
+      ],
+    });
+    store.approvePlan(mission.id);
+    const staff = store.hireStaff({
+      persona: "writer",
+      grade: "G1",
+      agent: "build",
+      provider: "deepseek",
+      model: "deepseek-flash",
+      variant: "low",
+      sessionID: "ses_lock",
+    });
+
+    store.assignTask(mission.id, "a", staff.id, { goal: "a" });
+    expect(() => store.assignTask(mission.id, "b", staff.id, { goal: "b" })).toThrow(
+      "path lock conflict with task a",
+    );
+    expect(() => store.assignTask(mission.id, "c", staff.id, { goal: "c" })).not.toThrow();
+    expect(store.listLocks(mission.id).map((lock) => lock.taskID).sort()).toEqual(["a", "c"]);
+  });
+});
+
+describe("janitor", () => {
+  let directory: string;
+  let db: Database;
+  let store: SquadStore;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), "squad-janitor-"));
+    db = openSquadDb(directory);
+    store = new SquadStore(db);
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  test("scan reports a mission that has been idle past the window", () => {
+    const mission = store.createMission("stale", "", "none");
+    const old = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+    db.query("UPDATE missions SET created_at = ?, updated_at = ? WHERE id = ?").run(
+      old,
+      old,
+      mission.id,
+    );
+
+    const report = scanStale(store, 120);
+    expect(report.stale.map((row) => row.id)).toEqual([mission.id]);
+    expect(report.stale[0]!.idleMinutes).toBeGreaterThan(200);
+    expect(report.aborted).toEqual([]);
+  });
+
+  test("a fresh mission is not reported", () => {
+    store.createMission("fresh", "", "none");
+    expect(scanStale(store, 120).stale).toEqual([]);
   });
 });

@@ -6,56 +6,48 @@ that cannot be expressed as a guarded transition does not go in.
 
 ## Shipped
 
+- **0.10.0** — write locks in in-place missions, `.squad/config.json`,
+  scheduled janitor, budget/metrics in the TUI panel, `squad_image`
+  `engine:"auto"`.
 - **0.9.7** — the report moves the task: `blocked` becomes a task state
-  without spending rework, `failed` fails the task, `done` submits it (issue
-  [#2](https://github.com/xuviga/opencode-squad/issues/2)).
+  without spending rework, `failed` fails the task, `done` submits it.
 - **0.9.6** — in-place attribution: a folder-wide diff is attributed using
   every concurrent task's allowlist; unclaimed files fail the task, and the
   guarantee is downgraded to advisory (with an event) when a concurrent writer
-  declared no paths (issue
-  [#5](https://github.com/xuviga/opencode-squad/issues/5)).
+  declared no paths.
 - **0.9.5** — scope enforcement in worktree missions: `squad_wait` fails a task
-  whose diff touches a file outside `paths` (`task.scope_violation`), before a
-  reviewer is hired (issue [#3](https://github.com/xuviga/opencode-squad/issues/3)).
-- **0.9.4** — scoped review: a task can declare `paths`, and the diff is split
-  into files it owns and files changed by sibling work, so an in-place folder
-  diff no longer produces false scope failures.
-- **0.9.4** — delivery metrics: pass@1, rework rate, failures, disputes and
-  cost per integrated task computed from task rows and the ledger and printed
-  by `squad_report` (issue
-  [#4](https://github.com/xuviga/opencode-squad/issues/4)).
-- **0.9.4** — reliability: one shared SQLite handle per project survives plugin
-  reloads, and `squad_mission create` probes the worktree capability before a
-  mission exists.
+  whose diff touches a file outside `paths`.
+- **0.9.4** — shared SQLite handle that survives plugin reloads, worktree
+  capability probe, per-task `paths` with a scoped diff, delivery metrics.
 
-## Now (0.9.x)
+## Now (0.10.x)
 
 - Keep the reviewer contract honest: a pass must name the checks its class
   requires, and a fail must clear the severity floor.
 - Keep `README.md`, `docs/PLAN.md` and the real tool surface in sync. Every
   release ships with a checked `bun run verify` line and the test count.
 
-## Next (0.10)
+## Next (0.11)
 
-- **Per-task write locks.** Attribution (0.9.6) tells the truth after the
-  fact; locks would refuse the conflict at assign time. Useful when two tasks
-  legitimately need the same directory.
-- **Configuration file.** `SquadConfig` is live but lives in code. A
-  `.squad/config.json` (grades, budgets, rework limit, stale window) with
-  validation and a documented precedence order.
-- **Scheduled janitor.** `squad_gc` exists but only runs by hand. A host-level
-  interval that scans and reports stale missions.
-- **Spend guardrails in the TUI.** The ledger has the numbers; the panel does
-  not show them.
+- **Hot config reload.** `.squad/config.json` is read at plugin start; changing
+  a limit currently needs `opencode service restart`.
+- **Secret filtering and prompt-injection wrapping** for worker briefs.
+  Permissions are the boundary today; a prompt is not one.
+- **Scheduled process audit.** `squad_audit action=process` exists but nobody
+  schedules it; the janitor could request one when a mission ends with
+  suspicious review rounds.
+- **TUI actions.** The panel approves and rejects a plan; it cannot assign,
+  review or cancel.
 
 ## Later
 
-- **Secret filtering and prompt-injection wrapping** for worker briefs. Prompts
-  are not a boundary; this needs a real one.
-- **Per-task image generation** on a provider that actually has an image model.
-  Today `engine:"vector"` is the only path that works without one.
+- **A real image model.** `engine:"auto"` works everywhere by falling back to
+  SVG, but a provider with an image model produces better bitmap art.
 - **A second isolation mode**: copy-on-write workspace instead of git worktree,
   for repositories too large to check out twice.
+- **Glob-aware locks.** Overlap uses literal prefixes, so `src/**` and
+  `docs/**` are disjoint but `src/**` and `src/a/*.ts` are conservatively
+  treated as overlapping.
 
 ## Not planned
 

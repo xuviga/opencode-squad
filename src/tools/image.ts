@@ -8,7 +8,7 @@ import { fail, ok } from "./result";
 
 type ImageInput = {
   prompt?: string;
-  engine?: "api" | "vector";
+  engine?: "auto" | "api" | "vector";
   model?: string;
   aspect?: string;
   resolution?: string;
@@ -54,16 +54,11 @@ type ModelEntry = {
   type?: string;
 };
 
-async function pickImageModel(ctx: Plugin.Context): Promise<string> {
+async function findImageModel(ctx: Plugin.Context): Promise<string | null> {
   const result = await ctx.model.list();
   const models = (result?.data ?? []) as ModelEntry[];
   const image = models.find((model) => model.type === "image");
-  if (!image) {
-    throw new Error(
-      "no image model is configured; pass model as provider/model (see available image models)",
-    );
-  }
-  return `${image.providerID}/${image.id}`;
+  return image ? `${image.providerID}/${image.id}` : null;
 }
 
 export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) {
@@ -71,12 +66,12 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
     editor.add({
       name: "image",
       description:
-        "Generate an image. engine=api uses experimental.generate.image; engine=vector asks a text model (DeepSeek) for a self-contained SVG and rasterizes it with resvg, so it works without an image model. Files go under .squad/artifacts.",
+        "Generate an image. engine=auto (default) uses an image model when one is configured and falls back to vector otherwise; engine=api requires an image model; engine=vector asks a text model (DeepSeek) for a self-contained SVG and rasterizes it with resvg. Files go under .squad/artifacts.",
       input: {
         type: "object",
         properties: {
           prompt: { type: "string" },
-          engine: { type: "string", enum: ["api", "vector"] },
+          engine: { type: "string", enum: ["auto", "api", "vector"] },
           model: { type: "string" },
           aspect: { type: "string" },
           resolution: { type: "string" },
@@ -95,7 +90,7 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
         const args = (input ?? {}) as ImageInput;
         try {
           if (!args.prompt) throw new Error("prompt is required");
-          const engine = args.engine ?? "api";
+          const requested = args.engine ?? "auto";
           const outDir = resolve(
             ctx.location.directory,
             args.out_dir?.trim() || ".squad/artifacts",
@@ -103,7 +98,7 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
           await mkdir(outDir, { recursive: true });
           const baseName = sanitizeName(args.name ?? `image-${Date.now()}`);
 
-          if (engine === "vector") {
+          const runVector = async () => {
             const reference = args.model?.trim() || "deepseek/deepseek-flash#high";
             const model = Model.Ref.parse(reference);
             const generated = await ctx.experimental.generate.text({
@@ -125,8 +120,8 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
             const pngPath = join(outDir, `${baseName}.png`);
             await writeFile(svgPath, svg, "utf8");
             const preview = renderSvgPreview(svgPath, pngPath, args.width ?? 1024);
-            return ok({
-              engine,
+            return {
+              engine: "vector" as const,
               model: reference,
               svg_path: svgPath,
               files: [
@@ -136,51 +131,89 @@ export async function registerImageTool(ctx: Plugin.Context, store: SquadStore) 
               width: preview.width,
               height: preview.height,
               out_dir: outDir,
+            };
+          };
+
+          const runApi = async (reference: string) => {
+            const model = Model.Ref.parse(reference);
+            const result = await ctx.experimental.generate.image({
+              model,
+              prompt: args.prompt as string,
+              ...(args.n ? { n: args.n } : {}),
+              ...(args.aspect ? { aspect: args.aspect as `${number}:${number}` } : {}),
+              ...(args.resolution ? { resolution: args.resolution } : {}),
             });
-          }
 
-          const reference = args.model?.trim() || (await pickImageModel(ctx));
-          const model = Model.Ref.parse(reference);
+            const files: Array<{ path: string; mime: string; bytes: number }> = [];
+            const images = result.images ?? [];
+            for (const [index, image] of images.entries()) {
+              const extension = extensionFor(image.mime);
+              const filePath = join(outDir, `${baseName}-${index + 1}.${extension}`);
+              const bytes = decodeBase64(image.data);
+              await writeFile(filePath, bytes);
+              files.push({ path: filePath, mime: image.mime, bytes: bytes.byteLength });
+            }
 
-          const result = await ctx.experimental.generate.image({
-            model,
-            prompt: args.prompt,
-            ...(args.n ? { n: args.n } : {}),
-            ...(args.aspect ? { aspect: args.aspect as `${number}:${number}` } : {}),
-            ...(args.resolution ? { resolution: args.resolution } : {}),
-          });
+            const cost = Number(result.cost ?? 0);
+            if (args.mission_id && cost > 0) {
+              store.recordLedger({
+                missionID: args.mission_id,
+                taskID: args.task_id ?? null,
+                provider: model.providerID,
+                model: model.id,
+                variant: model.variant ?? null,
+                inputTokens: result.tokens?.input ?? 0,
+                outputTokens: result.tokens?.output ?? 0,
+                cost,
+              });
+            }
 
-          const files: Array<{ path: string; mime: string; bytes: number }> = [];
-          const images = result.images ?? [];
-          for (const [index, image] of images.entries()) {
-            const extension = extensionFor(image.mime);
-            const filePath = join(outDir, `${baseName}-${index + 1}.${extension}`);
-            const bytes = decodeBase64(image.data);
-            await writeFile(filePath, bytes);
-            files.push({ path: filePath, mime: image.mime, bytes: bytes.byteLength });
-          }
-
-          const cost = Number(result.cost ?? 0);
-          if (args.mission_id && cost > 0) {
-            store.recordLedger({
-              missionID: args.mission_id,
-              taskID: args.task_id ?? null,
-              provider: model.providerID,
-              model: model.id,
-              variant: model.variant ?? null,
-              inputTokens: result.tokens?.input ?? 0,
-              outputTokens: result.tokens?.output ?? 0,
+            return {
+              engine: "api" as const,
+              model: reference,
+              files,
+              images: images.length,
               cost,
-            });
+              tokens: result.tokens ?? null,
+              out_dir: outDir,
+            };
+          };
+
+          if (requested === "vector") {
+            return ok(await runVector());
+          }
+
+          const imageModel =
+            args.model?.trim() || (requested === "api" ? await findImageModel(ctx) : null);
+          const resolved = imageModel ?? (requested === "api" ? null : await findImageModel(ctx));
+
+          if (resolved) {
+            if (requested === "api") {
+              return ok(await runApi(resolved));
+            }
+            try {
+              return ok(await runApi(resolved));
+            } catch (error) {
+              const reason = error instanceof Error ? error.message : String(error);
+              return ok({
+                ...(await runVector()),
+                engine_requested: "auto",
+                fallback_reason: `image model failed: ${reason}`,
+              });
+            }
+          }
+
+          if (requested === "api") {
+            throw new Error(
+              "no image model is configured. Run squad_image with engine=\"auto\" or engine=\"vector\" " +
+                "to generate an editable SVG and rasterize it with a text model instead",
+            );
           }
 
           return ok({
-            model: reference,
-            files,
-            images: images.length,
-            cost,
-            tokens: result.tokens ?? null,
-            out_dir: outDir,
+            ...(await runVector()),
+            engine_requested: "auto",
+            fallback_reason: "no image model is configured",
           });
         } catch (error) {
           return fail(error);

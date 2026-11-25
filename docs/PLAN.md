@@ -1,9 +1,9 @@
 # SQUAD — архитектура и состояние
 
-> Документ: **1.5** · 25.11.2026
-> Код: **0.9.7** (`master`)
+> Документ: **1.6** · 25.11.2026
+> Код: **0.10.0** (`master`)
 > Платформа: **OpenCode 2.4.1** · `@opencode/plugin@2.4.1` · `@opencode/client@2.4.1`
-> Проверка: `bun run verify` — typecheck, biome, **120 тестов в 24 файлах**, 0 fail.
+> Проверка: `bun run verify` — typecheck, biome, **127 тестов в 24 файлах**, 0 fail.
 
 ---
 
@@ -302,6 +302,9 @@ Permissions: read-only — deny `edit`, `shell`, `subagent`; write — allow `ed
 | Проверка worktree | `probeWorktree` на `mission create`; `squad_status` отдаёт `worktreeUsable` |
 | Живучесть БД | общая ручка на проект (`acquireSquadDb`), dispose её не закрывает |
 | Метрики | `metrics()`: pass@1, rework rate, failures, cost per integrated task |
+| Write locks | `assignTask` отказывает при пересечении `paths` с активной задачей в in-place |
+| Конфиг | `.squad/config.json` мержится с дефолтами, битый файл — ошибка загрузки |
+| Janitor | `startJanitor`: интервал `gcIntervalMinutes`, события `gc.stale`, авто-аборт по флагу |
 | In-place lock | один владелец папки; 2h/terminal эвикция |
 
 ---
@@ -362,7 +365,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 
 ## 12. Тесты
 
-24 файла, 120 тестов:
+24 файла, 127 тестов:
 
 | Группа | Файлы |
 |---|---|
@@ -394,7 +397,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 8. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
 9. **Release tag/release notes** — тег ставится, release workflow есть; первый релиз по нему ещё не прогонялся.
 10. **Расписание process audit и бюджет в TUI** — не реализованы.
-11. **Файл конфигурации** — `SquadConfig` живёт в коде/конструкторе, YAML/JSON-настроек нет.
+11. **Файл конфигурации** — реализован в 0.10.0 (`.squad/config.json`); осталось горячее перечитывание без рестарта.
 
 ---
 

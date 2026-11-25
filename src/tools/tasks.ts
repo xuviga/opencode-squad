@@ -51,6 +51,7 @@ export async function registerTasksTool(ctx: Plugin.Context, store: SquadStore) 
             },
             needs_attention: attention.length > 0,
             attention,
+            locks: store.listLocks(args.mission_id),
             tasks,
           });
         } catch (error) {

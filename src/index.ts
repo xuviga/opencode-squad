@@ -1,8 +1,10 @@
 import { Plugin } from "@opencode/plugin";
+import { loadSquadConfig } from "./config";
 import { acquireSquadDb } from "./db/index";
 import { SquadStore } from "./db/store";
 import { SquadRpc } from "./rpc";
 import { ensureInPlaceLock } from "./runtime/inplace-lock";
+import { startJanitor } from "./runtime/janitor";
 import { registerAppraiseTool } from "./tools/appraise";
 import { registerAssignTool } from "./tools/assign";
 import { registerAuditTool } from "./tools/audit";
@@ -38,8 +40,9 @@ import { VERSION } from "./version";
 export default Plugin.define({
   id: "squad",
   async setup(ctx) {
+    const config = loadSquadConfig(ctx.location.directory);
     const { db, release } = acquireSquadDb(ctx.location.directory);
-    const store = new SquadStore(db);
+    const store = new SquadStore(db, config);
     const rpcState: RpcRuntimeState = { registered: false };
 
     const registrations = await Promise.all([
@@ -117,7 +120,16 @@ export default Plugin.define({
       `[squad] v${VERSION} loaded at ${ctx.location.directory} (OpenCode ${ctx.app.version})`,
     );
 
+    const stopJanitor = startJanitor(store, config, (report) => {
+      if (report.stale.length === 0) return;
+      const aborted = report.aborted.length > 0 ? `, aborted ${report.aborted.length}` : "";
+      console.warn(
+        `[squad] gc: ${report.stale.length} stale mission(s)${aborted} (stale > ${report.staleAfterMinutes}m)`,
+      );
+    });
+
     return async () => {
+      stopJanitor();
       for (const registration of registrations) {
         await registration.dispose();
       }

@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { mapTask, now, type Task, type TaskRow } from "../model";
+import { overlappingPatterns } from "../../runtime/scope";
 import type { SquadStore } from "../store";
 
 export class TaskRepository {
@@ -40,6 +41,13 @@ export class TaskRepository {
     return this.listTasks(missionID).filter((task) => task.dependsOn.includes(taskID));
   }
 
+  /** Implicit write locks: paths of tasks that can write right now. */
+  listLocks(missionID: string): Array<{ taskID: string; status: string; paths: string[] }> {
+    return this.listTasks(missionID)
+      .filter((task) => ["assigned", "running"].includes(task.status) && task.paths.length > 0)
+      .map((task) => ({ taskID: task.id, status: task.status, paths: task.paths }));
+  }
+
   assignTask(missionID: string, taskID: string, staffID: string, brief: unknown): Task {
     const mission = this.store.requireMission(missionID);
     if (!["staffing", "executing"].includes(mission.status)) {
@@ -62,6 +70,22 @@ export class TaskRepository {
     const staff = this.store.requireStaff(staffID);
     if (staff.status !== "active") throw new Error(`staff is not active: ${staffID}`);
     if (!staff.sessionID) throw new Error(`staff has no session: ${staffID}`);
+
+    // In-place missions share one folder: two tasks that declare overlapping
+    // paths would overwrite each other. Worktree missions are isolated, so the
+    // check only applies when isolation is none.
+    if (mission.isolation === "none" && task.paths.length > 0) {
+      for (const other of this.listLocks(missionID)) {
+        if (other.taskID === taskID) continue;
+        const pairs = overlappingPatterns(task.paths, other.paths);
+        if (pairs.length > 0) {
+          throw new Error(
+            `path lock conflict with task ${other.taskID} (${other.status}): ${pairs.join("; ")}. ` +
+              `Wait for it to finish or narrow the paths of one task`,
+          );
+        }
+      }
+    }
 
     const maxRework = Math.max(0, Math.trunc(this.store.config.maxRework));
     const nextAttempts = task.status === "returned" ? task.attempts + 1 : task.attempts;

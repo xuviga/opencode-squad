@@ -105,8 +105,7 @@ export function partitionDiff(diff: unknown, allowlist: readonly string[]): Scop
   return { diff: cloned, allowlist: normalized, inScope: inScopeFiles, outOfScope };
 }
 
-/** Reads `paths` from a Task Brief without trusting its shape. */
-export function allowlistFromBrief(brief: unknown): string[] {
+/** Reads `paths` from a Task Brief without trusting its shape. */export function allowlistFromBrief(brief: unknown): string[] {
   if (!brief || typeof brief !== "object") return [];
   const paths = (brief as { paths?: unknown }).paths;
   if (!Array.isArray(paths)) return [];
@@ -114,8 +113,7 @@ export function allowlistFromBrief(brief: unknown): string[] {
 }
 
 /**
- * Files changed by a worker that the task does not own.
- *
+ * Files changed by a worker that the task does not own. *
  * Only trustworthy where the diff is attributable to one worker (a git
  * worktree). In `isolation: "none"` the snapshot diff is folder-wide, so this
  * reports sibling work as well and must stay advisory.
@@ -181,4 +179,58 @@ export function attributeInPlace(
     unclaimed,
     enforceable: allowlist.length > 0 && !concurrentWriterWithoutPaths,
   };
+}
+
+function literalPrefix(pattern: string): string {
+  const normalized = normalizePathLike(pattern);
+  const wildcard = normalized.search(/[*?]/);
+  return wildcard === -1 ? normalized : normalized.slice(0, wildcard);
+}
+
+/**
+ * True when two declared scopes can touch the same file.
+ *
+ * Exact paths and directory prefixes are compared directly. A glob is reduced
+ * to its literal prefix and treated as overlapping anything that shares it —
+ * conservative on purpose: refusing a safe assignment is cheaper than two
+ * workers overwriting each other in a folder without git.
+ */
+export function patternsOverlap(first: string, second: string): boolean {
+  const a = normalizePathLike(first);
+  const b = normalizePathLike(second);
+  if (!a || !b) return false;
+
+  const aGlob = /[*?]/.test(a);
+  const bGlob = /[*?]/.test(b);
+
+  if (!aGlob && !bGlob) {
+    const aPrefix = a.endsWith("/");
+    const bPrefix = b.endsWith("/");
+    if (aPrefix && bPrefix) return a.startsWith(b) || b.startsWith(a);
+    if (aPrefix) return b === a.slice(0, -1) || b.startsWith(a);
+    if (bPrefix) return a === b.slice(0, -1) || a.startsWith(b);
+    return a === b;
+  }
+
+  if (!aGlob) return pathMatches(a, b);
+  if (!bGlob) return pathMatches(b, a);
+
+  const prefixA = literalPrefix(a);
+  const prefixB = literalPrefix(b);
+  if (!prefixA || !prefixB) return true;
+  return prefixA.startsWith(prefixB) || prefixB.startsWith(prefixA);
+}
+
+/** Pairs of scopes that overlap; empty when the scopes are disjoint. */
+export function overlappingPatterns(
+  first: readonly string[],
+  second: readonly string[],
+): string[] {
+  const pairs: string[] = [];
+  for (const a of first) {
+    for (const b of second) {
+      if (patternsOverlap(a, b)) pairs.push(`${a} ↔ ${b}`);
+    }
+  }
+  return pairs;
 }
