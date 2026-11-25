@@ -407,5 +407,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 |---|---|
 | `README.md` | установка, быстрый старт, инструменты, гарантии, ограничения |
 | `docs/PLAN.md` | этот документ: архитектура, контракты, состояние, пробелы |
+| `docs/ROADMAP.md` | now / next / later / not planned |
+| `docs/releases/` | тексты релизов для GitHub |
 | `docs/DEVLOG.md` | хронология разработки и живые прогоны |
 | `CHANGELOG.md` | версии |

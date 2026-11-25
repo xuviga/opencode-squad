@@ -1,5 +1,10 @@
 # SQUAD
 
+[![CI](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml/badge.svg)](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml)
+[![version](https://img.shields.io/badge/version-0.9.3-blue.svg)](CHANGELOG.md)
+[![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![OpenCode](https://img.shields.io/badge/OpenCode-2.4.1-000000.svg)](https://opencode.ai)
+
 Мульти-агентный оркестратор для **OpenCode 2.4.1**: босс планирует миссию, нанимает сотрудников в дочерние сессии, проводит слепую ревизию, разрешает споры через арбитра и сливает работу в `main` через изолированные worktree. Организация — машина состояний в SQLite; переходы валидирует плагин, а не модель.
 
 **0.9.3** · 29 инструментов · 107 тестов в 23 файлах · `bun run verify` зелёный (25.11.2026).
@@ -180,5 +185,19 @@ CI (`.github/workflows/ci.yml`) на push в `master` и PR: `bun install --froz
 ## Документы
 
 - `docs/PLAN.md` — архитектура, контракты, состояние, что не реализовано.
+- `docs/ROADMAP.md` — что делается сейчас, что дальше и что не планируется.
 - `docs/DEVLOG.md` — журнал разработки и живые прогоны.
+- `docs/releases/` — тексты релизов, которые уходят на GitHub.
 - `CHANGELOG.md` — история версий.
+
+## Участие, безопасность, лицензия
+
+- Как собрать, проверить и прислать изменение: [CONTRIBUTING.md](CONTRIBUTING.md).
+- Правила общения: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- Уязвимости — приватно на `xuvigan@users.noreply.github.com`, модель доверия
+  и известные ограничения описаны в [SECURITY.md](SECURITY.md).
+- Лицензия — [MIT](LICENSE).
+
+Проект ведёт один человек; ответ на issue или pull request обычно занимает
+несколько дней. Проверенный прогон `bun run verify` в описании изменения
+сокращает это время вдвое.
