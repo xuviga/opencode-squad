@@ -10,7 +10,8 @@ that cannot be expressed as a guarded transition does not go in.
   requires, and a fail must clear the severity floor.
 - Close the remaining holes in the report flow: `report.status` is validated
   and stored, but it still does not move a task. Either map `blocked`/`failed`
-  to a task state or drop the field.
+  to a task state or drop the field — tracked in
+  [#2](https://github.com/xuviga/opencode-squad/issues/2).
 - Keep `README.md`, `docs/PLAN.md` and the real tool surface in sync. Every
   release ships with a checked `bun run verify` line and the test count.
 
