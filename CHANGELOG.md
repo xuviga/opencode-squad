@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.5 — 2026-11-25
+
+- **Scope is enforced in worktree missions** (issue #3): after the worker reports, `squad_wait` runs `git diff` against the task's allowlist and fails the task when a file outside `paths` changed. The event is `task.scope_violation` and the payload lists the files and the allowlist. In `isolation:"none"` the snapshot diff is folder-wide and cannot attribute authorship, so the allowlist stays advisory there and the reviewer is told which files are sibling work.
+- **TUI state carries delivery metrics**: `squad.tuiState()` now includes `metrics` (pass@1, rework, failures, disputes, cost per integrated task) next to the budget.
+- 117 tests (`tests/reliability.test.ts` covers `scopeViolations`).
+
 ## 0.9.4 — 2026-11-25
 
 - **Shared database handle**: the plugin now opens one SQLite handle per project and never closes it on dispose. A host plugin reload (for example after `session.move`) used to make in-flight tool calls fail with `Cannot use a closed database`.

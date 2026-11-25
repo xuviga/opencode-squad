@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { acquireSquadDb, closeSharedHandles, openSquadDb, sharedHandleCount } from "../src/db/index";
 import { SquadStore } from "../src/db/store";
-import { pathMatches, partitionDiff } from "../src/runtime/scope";
+import { pathMatches, partitionDiff, scopeViolations } from "../src/runtime/scope";
 import { probeWorktree, resetWorktreeProbeCache } from "../src/runtime/worktree";
 
 describe("shared database handle", () => {
@@ -78,6 +78,14 @@ describe("path allowlist", () => {
     const scoped = partitionDiff(diff, []);
     expect(scoped.outOfScope).toEqual([]);
     expect(scoped.inScope).toEqual(["README.md"]);
+  });
+
+  test("scopeViolations lists only files the task does not own", () => {
+    const diff = {
+      data: [{ file: "src/app.ts" }, { file: "README.md" }, { file: "docs/x.md" }],
+    };
+    expect(scopeViolations(["src/", "docs/"], diff)).toEqual(["README.md"]);
+    expect(scopeViolations([], diff)).toEqual([]);
   });
 });
 

@@ -1,7 +1,9 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { commitWorktree, type WorktreeCommit } from "../runtime/commit";
+import { taskDiff } from "../runtime/diff";
 import { extractLastAssistantText } from "../runtime/messages";
+import { allowlistFromBrief, scopeViolations } from "../runtime/scope";
 import { fail, ok } from "./result";
 
 type WaitInput = {
@@ -160,6 +162,34 @@ export async function registerWaitTool(ctx: Plugin.Context, store: SquadStore) {
               outputTokens: info.tokens.output,
               cost: info.cost,
             });
+          }
+
+          const allowlist = allowlistFromBrief(task.brief);
+          if (staff?.worktreeDirectory && allowlist.length > 0) {
+            let violations: string[] = [];
+            try {
+              violations = scopeViolations(allowlist, await taskDiff(ctx, store, task));
+            } catch {
+              violations = [];
+            }
+            if (violations.length > 0) {
+              store.addEvent(args.mission_id, args.task_id, "task.scope_violation", {
+                files: violations,
+                allowlist,
+              });
+              const failed = store.failTask(
+                args.mission_id,
+                args.task_id,
+                `scope violation: changed files outside the allowlist: ${violations.slice(0, 20).join(", ")}`,
+              );
+              return ok({
+                timedOut: false,
+                task: failed,
+                error: "scope violation",
+                scope_violation: violations,
+                allowlist,
+              });
+            }
           }
 
           task = store.saveRawReport(args.mission_id, args.task_id, rawReport);

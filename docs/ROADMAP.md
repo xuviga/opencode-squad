@@ -6,10 +6,12 @@ that cannot be expressed as a guarded transition does not go in.
 
 ## Shipped
 
+- **0.9.5** — scope enforcement in worktree missions: `squad_wait` fails a task
+  whose diff touches a file outside `paths` (`task.scope_violation`), before a
+  reviewer is hired (issue [#3](https://github.com/xuviga/opencode-squad/issues/3)).
 - **0.9.4** — scoped review: a task can declare `paths`, and the diff is split
   into files it owns and files changed by sibling work, so an in-place folder
-  diff no longer produces false scope failures (issue
-  [#3](https://github.com/xuviga/opencode-squad/issues/3), review side).
+  diff no longer produces false scope failures.
 - **0.9.4** — delivery metrics: pass@1, rework rate, failures, disputes and
   cost per integrated task computed from task rows and the ledger and printed
   by `squad_report` (issue
@@ -31,10 +33,10 @@ that cannot be expressed as a guarded transition does not go in.
 
 ## Next (0.10)
 
-- **Enforce the allowlist, not just describe it.** Today `paths` scopes the
-  review; a worker can still write outside it. Blocking needs a write hook or a
-  diff check before the report is accepted (issue
-  [#3](https://github.com/xuviga/opencode-squad/issues/3)).
+- **Attribute in-place writes.** The allowlist is enforced in worktree
+  missions; in `isolation:"none"` a folder-wide snapshot diff cannot say who
+  wrote a file. Per-task file locks or a pre-report ownership check would make
+  the same guarantee hold without git.
 - **Configuration file.** `SquadConfig` is live but lives in code. A
   `.squad/config.json` (grades, budgets, rework limit, stale window) with
   validation and a documented precedence order.

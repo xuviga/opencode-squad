@@ -112,3 +112,15 @@ export function allowlistFromBrief(brief: unknown): string[] {
   if (!Array.isArray(paths)) return [];
   return paths.filter((value): value is string => typeof value === "string");
 }
+
+/**
+ * Files changed by a worker that the task does not own.
+ *
+ * Only trustworthy where the diff is attributable to one worker (a git
+ * worktree). In `isolation: "none"` the snapshot diff is folder-wide, so this
+ * reports sibling work as well and must stay advisory.
+ */
+export function scopeViolations(allowlist: readonly string[], diff: unknown): string[] {
+  if (allowlist.length === 0) return [];
+  return partitionDiff(diff, allowlist).outOfScope;
+}

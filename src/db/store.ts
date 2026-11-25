@@ -383,6 +383,7 @@ export class SquadStore {
       tasks: tasks.map(({ brief, rawReport, ...task }) => task),
       staff: this.listStaff(50),
       budget: mission ? this.budgetSummary(mission.id) : this.budgetSummary(),
+      metrics: mission ? this.metrics(mission.id) : this.metrics(),
       audits: mission ? this.listAudits(mission.id) : [],
       disputes: mission ? this.listDisputes(mission.id) : [],
       lessons: mission ? this.listLessons(mission.id) : [],
