@@ -3,7 +3,7 @@
   "version": "0.9.3",
   "private": true,
   "type": "module",
-  "description": "Multi-agent orchestrator plugin for OpenCode: missions, isolated worktrees, blind review, disputes and audits",
+  "description": "Multi-agent orchestrator for OpenCode: an evidenced process with plan gate, isolation and blind review.",
   "author": "XuViGaN <xuvigan@users.noreply.github.com>",
   "license": "MIT",
   "homepage": "https://github.com/xuviga/opencode-squad#readme",

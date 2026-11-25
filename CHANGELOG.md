@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **README "Why"**: a new section states the problem the project answers — an agent grading its own work — and answers it with a real plan gate, isolation and blind review.
+- **Positioning**: `docs/POSITIONING.md` captures the one-line thesis (process with evidence) and the claims the project makes, so the README, docs and metadata stay in one voice.
+- **Metadata**: `package.json` `description` is now one English sentence under 120 characters that matches the README thesis; the version is unchanged.
+
 ## 0.9.3 — 2026-11-25
 
 - **Human approve gate is real**: `squad_plan` (submit/get/approve/reject) and `squad_mission` now call `permission.assert`; a denied permission leaves the mission in `plan_gate`. Before this, any agent holding the squad tools could approve its own plan.
