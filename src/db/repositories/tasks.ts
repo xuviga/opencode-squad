@@ -63,8 +63,9 @@ export class TaskRepository {
     if (staff.status !== "active") throw new Error(`staff is not active: ${staffID}`);
     if (!staff.sessionID) throw new Error(`staff has no session: ${staffID}`);
 
+    const maxRework = Math.max(0, Math.trunc(this.store.config.maxRework));
     const nextAttempts = task.status === "returned" ? task.attempts + 1 : task.attempts;
-    if (nextAttempts > 2) {
+    if (nextAttempts > maxRework) {
       const timestamp = now();
       this.db
         .query(
@@ -75,18 +76,36 @@ export class TaskRepository {
       this.store.addEvent(missionID, taskID, "task.escalated", {
         reason: "rework limit exceeded",
         attempts: task.attempts,
+        maxRework,
       });
-      throw new Error(`rework limit exceeded for task ${taskID}`);
+      throw new Error(`rework limit exceeded for task ${taskID} (max ${maxRework})`);
+    }
+
+    const hardLimit = this.store.config.hardLimitUsd;
+    if (
+      hardLimit !== null &&
+      Number.isFinite(hardLimit) &&
+      hardLimit > 0 &&
+      mission.actualCostUsd >= hardLimit
+    ) {
+      this.store.addEvent(missionID, taskID, "budget.hard_limit", {
+        spentUsd: mission.actualCostUsd,
+        hardLimitUsd: hardLimit,
+      });
+      throw new Error(
+        `mission budget hard limit reached: spent $${mission.actualCostUsd.toFixed(6)} of $${hardLimit.toFixed(6)}; ` +
+          "raise the limit, integrate what passed, or cancel the mission",
+      );
     }
 
     const timestamp = now();
     const assign = this.db.transaction(() => {
-      this.db
+      const updated = this.db
         .query(
           `UPDATE tasks
            SET status = 'assigned', staff_id = ?, session_id = ?, brief_json = ?,
                assigned_at = ?, attempts = ?, updated_at = ?
-           WHERE mission_id = ? AND id = ?`,
+           WHERE mission_id = ? AND id = ? AND status IN ('ready', 'failed', 'returned')`,
         )
         .run(
           staffID,
@@ -98,6 +117,11 @@ export class TaskRepository {
           missionID,
           taskID,
         );
+      if (updated.changes === 0) {
+        throw new Error(
+          `task state changed during assignment: ${taskID}; re-read the task and retry`,
+        );
+      }
       this.db
         .query(
           `UPDATE missions
@@ -295,6 +319,28 @@ export class TaskRepository {
     this.store.addEvent(missionID, taskID, "integration.merged", {
       commit: commit.trim(),
       sourceCommit: sourceCommit?.trim() || null,
+    });
+    return this.requireTask(missionID, taskID);
+  }
+
+  /**
+   * Reverts the integration bookkeeping when a later cherry-pick in the same
+   * batch failed and `main` was rolled back. Without this the database would
+   * claim a merge that no longer exists in git.
+   */
+  unmarkMerged(missionID: string, taskID: string, reason: string): Task {
+    const task = this.requireTask(missionID, taskID);
+    if (!task.mergedAt) return task;
+    const timestamp = now();
+    this.db
+      .query(
+        `UPDATE tasks SET merged_at = NULL, integration_commit = NULL, updated_at = ?
+         WHERE mission_id = ? AND id = ?`,
+      )
+      .run(timestamp, missionID, taskID);
+    this.store.addEvent(missionID, taskID, "integration.rollback", {
+      commit: task.integrationCommit,
+      reason,
     });
     return this.requireTask(missionID, taskID);
   }

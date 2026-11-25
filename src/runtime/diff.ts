@@ -28,17 +28,25 @@ function splitLines(text: string): string[] {
 /**
  * Diff for an isolated worker worktree.
  * The plugin VCS API ignores the `location` input, so we read git directly
- * from the staff worktree. Both committed (HEAD^) and working changes are
- * included; untracked files are listed but have no patch.
+ * from the staff worktree. The baseline is the commit the worktree branched
+ * from (`worktree_base`), so *every* worker commit is visible to the reviewer,
+ * not only the last one. Legacy staff rows without a base fall back to HEAD^.
  */
-function worktreeDiff(directory: string): DiffFile[] {
+function worktreeDiff(directory: string, base?: string | null): DiffFile[] {
   const files = new Set<string>();
+  const resolvedBase =
+    base && git(["rev-parse", "--verify", `${base}^{commit}`], directory).trim()
+      ? base
+      : undefined;
 
-  for (const args of [
-    ["diff", "--name-only", "HEAD^"],
-    ["diff", "--name-only"],
-    ["diff", "--name-only", "--cached"],
-  ]) {
+  const nameOnlyArgs: string[][] = resolvedBase
+    ? [["diff", "--name-only", resolvedBase]]
+    : [
+        ["diff", "--name-only", "HEAD^"],
+        ["diff", "--name-only"],
+        ["diff", "--name-only", "--cached"],
+      ];
+  for (const args of nameOnlyArgs) {
     for (const file of splitLines(git(args, directory))) files.add(file);
   }
 
@@ -63,13 +71,15 @@ function worktreeDiff(directory: string): DiffFile[] {
       });
       continue;
     }
-    const patch = [
-      git(["diff", "HEAD^", "--", file], directory),
-      git(["diff", "--", file], directory),
-      git(["diff", "--cached", "--", file], directory),
-    ]
-      .filter(Boolean)
-      .join("\n");
+    const patch = resolvedBase
+      ? git(["diff", resolvedBase, "--", file], directory)
+      : [
+          git(["diff", "HEAD^", "--", file], directory),
+          git(["diff", "--", file], directory),
+          git(["diff", "--cached", "--", file], directory),
+        ]
+          .filter(Boolean)
+          .join("\n");
     if (patch) data.push({ file, status: "changed", patch });
   }
 
@@ -120,7 +130,7 @@ export async function taskDiff(
   const staff = task.staffID ? store.getStaff(task.staffID) : undefined;
   if (staff?.worktreeDirectory) {
     directory = staff.worktreeDirectory as typeof directory;
-    const data = worktreeDiff(directory);
+    const data = worktreeDiff(directory, staff.worktreeBase);
     const head = git(["rev-parse", "HEAD"], directory).trim();
     const subject = git(["log", "-1", "--pretty=%s"], directory).trim();
     const dirty = git(["status", "--porcelain"], directory).trim();
@@ -133,6 +143,7 @@ export async function taskDiff(
         head,
         subject,
         dirty: dirty.length > 0,
+        base: staff.worktreeBase,
       },
       data,
     };

@@ -33,12 +33,24 @@ export async function registerTasksTool(ctx: Plugin.Context, store: SquadStore) 
             action: "squad_tasks",
             resources: [args.mission_id],
           });
-          const tasks = store
-            .listTasks(args.mission_id)
-            .filter((task) => (args.status ? task.status === args.status : true));
+          const mission = store.requireMission(args.mission_id);
+          const all = store.listTasks(args.mission_id);
+          const tasks = all.filter((task) => (args.status ? task.status === args.status : true));
+          const attention = all
+            .filter((task) => ["failed", "escalated", "cancelled"].includes(task.status))
+            .map((task) => ({ id: task.id, status: task.status, attempts: task.attempts }));
           return ok({
             mission_id: args.mission_id,
+            mission_status: mission.status,
             count: tasks.length,
+            readiness: {
+              ready: all.filter((task) => task.status === "ready").length,
+              running: all.filter((task) => task.status === "running").length,
+              returned: all.filter((task) => task.status === "returned").length,
+              integrated: all.filter((task) => task.status === "integrated").length,
+            },
+            needs_attention: attention.length > 0,
+            attention,
             tasks,
           });
         } catch (error) {

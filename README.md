@@ -1,14 +1,14 @@
 # SQUAD
 
-Мульти-агентный оркестратор для **OpenCode 2.3.0**: босс планирует миссию, нанимает сотрудников в дочерние сессии, проводит слепую ревизию, разрешает споры через арбитра и сливает работу в `main` через изолированные worktree. Организация — машина состояний в SQLite; переходы валидирует плагин, а не модель.
+Мульти-агентный оркестратор для **OpenCode 2.4.1**: босс планирует миссию, нанимает сотрудников в дочерние сессии, проводит слепую ревизию, разрешает споры через арбитра и сливает работу в `main` через изолированные worktree. Организация — машина состояний в SQLite; переходы валидирует плагин, а не модель.
 
-**0.9.2** · 29 инструментов · 98 тестов в 22 файлах · `bun run verify` зелёный (17.11.2026).
+**0.9.3** · 29 инструментов · 107 тестов в 23 файлах · `bun run verify` зелёный (25.11.2026).
 
 ## Требования
 
-- OpenCode `2.3.0`;
+- OpenCode `2.4.1`;
 - Bun;
-- `@opencode/plugin` `2.3.0` (exact pin; legacy `@opencode-ai/plugin@1.x` не поддерживается);
+- `@opencode/plugin` `2.4.1` (exact pin; legacy `@opencode-ai/plugin@1.x` не поддерживается);
 - для TUI-панели — `@opentui/core`, `@opentui/solid`, `solid-js`, `@opencode/theme`;
 - для миссий `isolation:"worktree"` — git-репозиторий.
 
@@ -125,13 +125,16 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 
 ## Что реально проверяется
 
-- **Plan gate**: `squad_hire` работает только в `staffing/executing/reviewing`; до approve нанять нельзя. План валидируется: непустые tasks, уникальные id, известный класс/грейд, непустые acceptance, существующие зависимости.
+- **Plan gate**: `squad_hire` работает только в `staffing/executing/reviewing`; до approve нанять нельзя. `squad_plan` и `squad_mission` вызывают `permission.assert`, поэтому отклонённое право оставляет миссию в `plan_gate`. План валидируется: непустые tasks, уникальные id, известный класс/грейд, непустые acceptance, существующие зависимости.
 - **Слепая ревизия**: ревизор — отдельный агент без инструментов (`permissions: * deny`, `steps: 2`), грейд на один выше; при G4 берётся `critic` того же грейда. Промпт не содержит рассуждений исполнителя.
 - **Класс-зависимые проверки**: `code/data/ops` требуют `checked: diff+tests` (в in-place — `diff+acceptance`); остальные классы — `acceptance+evidence`.
 - **Вердикт**: `fail` только при severity `high`/`critical` и хотя бы одном finding с evidence; `pass` обязан перечислить требуемые проверки. Мелкие замечания → `pass` с findings.
 - **Rework**: лимит 2 зашит в store (`attempts > 2`); вердикт `fail` возвращает задачу в `returned`.
 - **Свежесть отчёта**: review/check отклоняют отчёт, снятый до `assigned_at`; после rework нужен новый `squad_wait`.
-- **Интеграция**: `squad_integrate` отказывается работать на грязном `main`; при конфликте `abort` оставляет main чистым, `theirs` разрешает конфликт в пользу воркера. После cherry-pick worktree удаляется, diff читается из integration-коммита.
+- **Интеграция**: `squad_integrate` отказывается работать на грязном `main`; при конфликте `abort` оставляет main чистым, `theirs` разрешает конфликт в пользу воркера. Батч all-or-nothing: если второй cherry-pick упал, main откатывается к HEAD до батча, задачи этого вызова размечаются как неслитые (`integration.rollback`), worktree остаются для повтора. Worktree удаляются только после успеха всего батча.
+- **Базовый коммит воркера**: `staff.worktree_base` (миграция 010) фиксирует коммит, от которого создан worktree; ревизор и аудит видят `git diff <base>`, то есть **все** коммиты воркера, а не только последний.
+- **Живой конфиг**: `SquadStore` принимает `SquadConfig`; `maxRework` управляет эскалацией, `hardLimitUsd` блокирует новые назначения при перерасходе (`budget.hard_limit`), `softWarnPct` задаёт пороги бюджетного радара.
+- **Освобождение сессий**: ревизор, второй ревизор, процессный аудитор и арбитр гасятся (`interrupt` + `remove`) после вердикта/рулинга; cost и tokens остаются в ledger.
 - **Evidence-гейт аудита**: worktree-задача, integrated без `merged_at`/integration-коммита в `main`, падает детерминированно, без трат на модель; in-place задачи ancestry не проверяют по design. Процессный аудит получает `process_checks` от git и обязан валить миссию при `ok:false`.
 - **Поздний false-pass**: если зависимые задачи уже integrated, задача остаётся integrated, миссия → `failed`, событие `audit.late_false_pass`, ревизору −0.3.
 - **Finalize**: все задачи integrated; для worktree каждый `integration_commit` — предок `HEAD` main (in-place ancestry не проверяет); минимум `max(1, ceil(10% задач))` вторых ревизий; worktree-задачи merged. Только после этого `done` и удаление worktree.
@@ -168,7 +171,7 @@ CI (`.github/workflows/ci.yml`) на push в `master` и PR: `bun install --froz
 - `session.wait` ждёт model work, но не `session.shell`; timeout-ветка покрыта fake-session тестом.
 - In-place: нет истории и отката, параллельные писатели конфликтуют, снапшот не хранит файлы >2 МБ и бинарники.
 - `report.status` не управляет статусом задачи (см. «Состояния»).
-- `maxRework`, `softWarnPct`, `hardLimitUsd` в `src/config.ts` объявлены, но код их не читает: лимит rework зашит, пороги бюджета зашиты, hard limit не реализован.
+- `maxRework`, `softWarnPct`, `hardLimitUsd` читаются из `SquadConfig`; конфиг задаётся в коде (`src/config.ts`), файла настроек пока нет.
 - `squad_gc` не запускается сам — только явный `scan`/`apply`.
 - У DeepSeek нет image-модели; `engine:"api"` требует внешнюю image-модель, `engine:"vector"` работает без неё. DeepSeek Flash принимает PNG как вложение.
 - После интеграции source-коммит worktree остаётся detached; в `main` попадает cherry-pick commit.

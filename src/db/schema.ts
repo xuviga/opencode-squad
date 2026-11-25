@@ -226,4 +226,11 @@ ALTER TABLE missions ADD COLUMN isolation TEXT NOT NULL DEFAULT 'worktree';
 ALTER TABLE tasks ADD COLUMN snapshot_directory TEXT;
 `,
   },
+  {
+    version: 10,
+    name: "worktree_base",
+    sql: `
+ALTER TABLE staff ADD COLUMN worktree_base TEXT;
+`,
+  },
 ];

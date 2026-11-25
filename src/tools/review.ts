@@ -5,6 +5,7 @@ import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
 import { formatDiffForPrompt } from "../runtime/snapshot";
+import { releaseSession } from "../runtime/sessions";
 import { requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
@@ -160,6 +161,13 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             });
           } catch (error) {
             store.resetReview(args.mission_id, args.task_id, "review prompt admission failed");
+            const released = await releaseSession(ctx, reviewer.sessionID);
+            store.addEvent(args.mission_id, args.task_id, "session.released", {
+              sessionID: reviewer.sessionID,
+              role: "reviewer",
+              released,
+              reason: "review prompt admission failed",
+            });
             throw error;
           }
 

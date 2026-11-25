@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { DEFAULT_CONFIG, type SquadConfig } from "../config";
 import type { MissionPlan } from "../plan";
 import {
   ISOLATION_MODES,
@@ -55,8 +56,11 @@ export class SquadStore {
   readonly disputes: DisputeRepository;
   readonly audits: AuditRepository;
   readonly events: EventRepository;
+  /** Live configuration: rework limit, budget radar and hard cost limit. */
+  readonly config: SquadConfig;
 
-  constructor(db: Database) {
+  constructor(db: Database, config: SquadConfig = DEFAULT_CONFIG) {
+    this.config = config;
     this.missions = new MissionRepository(db, this);
     this.tasks = new TaskRepository(db, this);
     this.staff = new StaffRepository(db, this);
@@ -239,6 +243,10 @@ export class SquadStore {
 
   markMergedInPlace(missionID: string, taskID: string): Task {
     return this.tasks.markMergedInPlace(missionID, taskID);
+  }
+
+  unmarkMerged(missionID: string, taskID: string, reason: string): Task {
+    return this.tasks.unmarkMerged(missionID, taskID, reason);
   }
 
   failTask(missionID: string, taskID: string, reason: string): Task {

@@ -139,7 +139,9 @@ export class AuditRepository {
 
   hasAudit(missionID: string, taskID: string): boolean {
     const row = this.db
-      .query("SELECT COUNT(*) AS count FROM audits WHERE mission_id = ? AND task_id = ?")
+      .query(
+        "SELECT COUNT(*) AS count FROM audits WHERE mission_id = ? AND task_id = ? AND kind = 'second_review'",
+      )
       .get(missionID, taskID) as { count: number };
     return row.count > 0;
   }

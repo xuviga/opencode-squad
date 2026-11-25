@@ -59,10 +59,13 @@ export class LedgerRepository {
     if (expected === null || expected <= 0) {
       return { ratio: null, warnings: [] as string[], anomaly: false };
     }
+    const [soft, hard] = this.store.config.softWarnPct;
+    const softRatio = soft / 100;
+    const hardRatio = hard / 100;
     const ratio = actual / expected;
     const warnings: string[] = [];
-    if (ratio >= 0.7) warnings.push("70% of expected");
-    if (ratio >= 0.9) warnings.push("90% of expected");
+    if (ratio >= softRatio) warnings.push(`${soft}% of expected`);
+    if (ratio >= hardRatio) warnings.push(`${hard}% of expected`);
     if (ratio > 3) warnings.push("more than 3x expected");
     return { ratio, warnings, anomaly: ratio > 3 };
   }

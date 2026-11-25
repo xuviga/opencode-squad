@@ -1,9 +1,9 @@
 # SQUAD — архитектура и состояние
 
-> Документ: **1.0** · 17.11.2026
-> Код: **0.9.2** (`ff6737d`, master)
-> Платформа: **OpenCode 2.3.0** · `@opencode/plugin@2.3.0` · `@opencode/client@2.3.0`
-> Проверка: `bun run verify` — typecheck, biome, **98 тестов в 22 файлах**, 0 fail.
+> Документ: **1.1** · 25.11.2026
+> Код: **0.9.3** (`master`)
+> Платформа: **OpenCode 2.4.1** · `@opencode/plugin@2.4.1` · `@opencode/client@2.4.1`
+> Проверка: `bun run verify` — typecheck, biome, **107 тестов в 23 файлах**, 0 fail.
 
 ---
 
@@ -19,10 +19,10 @@
 | M4 worktree, DAG, интеграция | ✅ | worktree, зависимости, `squad_integrate/finalize` |
 | M5 споры и аудит | ✅ | `squad_dispute/audit`, арбитр, process auditor |
 | M6 классы и медиа | ✅ | 10 шаблонов, capabilities, `squad_image/preview/look` |
-| M7 закалка | ✅ 0.8–0.9.2 | gc, split store, CI, in-place, snapshot-diff, late false-pass, lock |
+| M7 закалка | ✅ 0.8–0.9.3 | gc, split store, CI, in-place, snapshot-diff, late false-pass, lock, batch rollback, live config |
 | Release tag | ❌ | тега и release notes нет |
 
-29 инструментов. Тесты: 22 файла, 98 кейсов. CI: `.github/workflows/ci.yml`.
+29 инструментов. Тесты: 23 файла, 107 кейсов. CI: `.github/workflows/ci.yml`.
 
 ---
 
@@ -109,6 +109,7 @@ tests/                    22 файла, 98 тестов
 | 007 | report_captured_at, merged_at, integration_commit |
 | 008 | tasks.capabilities_json |
 | 009 | missions.isolation, tasks.snapshot_directory |
+| 010 | staff.worktree_base (базовый коммит для diff) |
 
 ---
 
@@ -131,12 +132,13 @@ draft → plan_gate → staffing → executing → reviewing → integrating →
 ```text
 pending → ready → running → submitted → in_review → integrated
                      │          ↑           │
-                     │          └─ returned ┘ (rework ≤ 2)
+                     │          └─ returned ┘ (rework ≤ maxRework, default 2)
                      ├→ failed (timeout/crash/prompt failure)
+                     ├→ escalated (rework limit exceeded)
                      └→ cancelled (abort миссии)
 ```
 
-`report.status: done | blocked | failed` валидируется и сохраняется в `report_json`, но **не** меняет статус задачи. Задачу закрывает только вердикт: `pass → integrated`, `fail → returned`. `failed` ставит `wait` при timeout/crash или `assign` при ошибке prompt.
+`report.status: done | blocked | failed` валидируется и сохраняется в `report_json`, но **не** меняет статус задачи. Задачу закрывает только вердикт: `pass → integrated`, `fail → returned`. `failed` ставит `wait` при timeout/crash или `assign` при ошибке prompt. `squad_tasks` показывает `needs_attention` со списком failed/escalated/cancelled задач, чтобы миссия не «висела» молча.
 
 ---
 
@@ -276,20 +278,25 @@ Permissions: read-only — deny `edit`, `shell`, `subagent`; write — allow `ed
 
 | Гейт | Реализация |
 |---|---|
-| Plan gate | hire только в `staffing/executing/reviewing`; до approve нанять нельзя |
+| Plan gate | hire только в `staffing/executing/reviewing`; до approve нанять нельзя; `plan`/`mission` идут через `permission.assert` |
+| Атомарный assign | условный `UPDATE ... WHERE status IN ('ready','failed','returned')` + проверка `changes` |
 | Слепая ревизия | отдельный no-tools агент, грейд +1, только brief/report/diff/images |
-| Класс-зависимые проверки | `requiredChecks` в `src/verdict.ts` |
+| Класс-зависимые проверки | `requiredChecks` в `src/verdict.ts`; промпт агента `squad-reviewer` следует тому же списку |
 | Severity floor | fail только high/critical + finding |
-| Rework | `attempts > 2` → отказ в `assignTask` |
+| Rework | `attempts > config.maxRework` → `escalated` |
 | Свежесть отчёта | `report_captured_at >= assigned_at`, иначе review/check отказывают |
 | Чистый main | `integrate` отказывается при грязном working tree |
 | Конфликт | `abort` — main чистый; `theirs` — сторона воркера, strategy в результате |
-| Удаление worktree | после integrate, cancel, finalize |
+| Батч-интеграция | all-or-nothing: при падении N-го cherry-pick main ресетится к HEAD батча, задачи вызова размечиваются (`integration.rollback`), worktree сохраняются |
+| Diff worktree | `git diff <staff.worktree_base>` — все коммиты воркера; legacy fallback `HEAD^` |
+| Удаление worktree | после успешного батча, cancel, finalize |
+| Освобождение сессий | reviewer/second reviewer/auditor/arbiter: interrupt + remove после вердикта; ledger сохраняет cost |
 | Evidence-гейт | `taskEvidence`: для worktree проверяет `merged_at` и ancestry, in-place пропускает; до вызова модели |
-| Audit quota | finalize: `max(1, ceil(10% tasks))` вторых ревизий |
+| Audit quota | finalize: `max(1, ceil(10% tasks))` вторых ревизий; `hasAudit` считает только `second_review` |
 | Поздний false-pass | задача остаётся integrated, миссия `failed`, событие `audit.late_false_pass` |
 | Авто-коммит | `squad_wait` коммитит грязный worktree; ошибка → task `failed` |
 | Бюджет воркера | research 10 tool-calls, остальные 20; stop-policy в brief и промпте |
+| Жёсткий лимит бюджета | `config.hardLimitUsd` блокирует новый assign при перерасходе (`budget.hard_limit`) |
 | In-place lock | один владелец папки; 2h/terminal эвикция |
 
 ---
@@ -299,9 +306,10 @@ Permissions: read-only — deny `edit`, `shell`, `subagent`; write — allow `ed
 - Ledger пишет per-session `cost`, `tokens.input`, `tokens.output`, staff, provider/model/variant.
 - Источник — `session.get` (`SessionInfo.cost/tokens`), не проектный `session.stats`.
 - `squad_budget`: expected из плана, actual из ledger; `ratio = actual/expected`.
-- Предупреждения: ≥70 %, ≥90 %, >3× (аномалия).
-- Жёсткого лимита нет: `hardLimitUsd` объявлен, но не читается.
-- `expectedCostUsd` задаёт план; фактический расход считается по ledger.
+- Предупреждения: `store.config.softWarnPct` (по умолчанию 70/90 %), аномалия >3×.
+- `hardLimitUsd` (по умолчанию `null`) блокирует новые назначения, когда миссия уже израсходовала лимит.
+- `maxRework` управляет эскалацией, `staleAfterMinutes` — порогом gc.
+- Конфиг передаётся в `new SquadStore(db, config)`; значения по умолчанию — `DEFAULT_CONFIG` в `src/config.ts`.
 
 ---
 
@@ -349,7 +357,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 
 ## 12. Тесты
 
-22 файла, 98 тестов:
+23 файла, 107 тестов:
 
 | Группа | Файлы |
 |---|---|
@@ -359,6 +367,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 | Ревизия | `verdict`, `ruling`, `process-audit` |
 | Интеграция | `integrate`, `evidence`, `gc`, `inplace-lock` |
 | Поведение | `chaos` |
+| Гейты 0.9.3 | `gates` (config, audit scoping, worktree base, batch rollback, permission) |
 | Контракты | `api-drift`, `tui`, `preview` |
 
 `bun run verify`: typecheck → biome → test. CI повторяет это на Ubuntu с `--frozen-lockfile`.
@@ -372,25 +381,23 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 1. **`/mission`** — команды в репозитории нет; заявление в CHANGELOG 0.9.2 удалено. Планирование идёт через `squad_mission/plan` (решения принимает модель).
 2. **Детерминированный роутер и `generate.decisions`** — не используются; декомпозиция полностью на боссе.
 3. **`steer`** — `delivery:"steer"` не применяется, только `"queue"`.
-4. **Жёсткий лимит бюджета** — `hardLimitUsd` не читается.
-5. **Конфиг `maxRework`/`softWarnPct`** — не читается; значения зашиты.
-6. **Секреты, allowlist путей, обёртка prompt injection** — фильтрации нет; blind-ревизия ограничена промптом и отсутствием инструментов.
-7. **Автоматический janitor** — только явный `squad_gc`.
-8. **`report.status` → статус задачи** — не маппится.
-9. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
-10. **Release tag/release notes** — отсутствуют.
-11. **Метрики успеха** (pass@1 ≥60 %, доля споров, $/задача) — не собираются автоматически; scorecard считает только по своим задачам и ledger.
-12. **Расписание process audit и бюджет в TUI** — не реализованы.
+4. **Секреты, allowlist путей, обёртка prompt injection** — фильтрации нет; blind-ревизия ограничена промптом и отсутствием инструментов.
+5. **Автоматический janitor** — только явный `squad_gc`.
+6. **`report.status` → статус задачи** — не маппится.
+7. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
+8. **Release tag/release notes** — отсутствуют.
+9. **Метрики успеха** (pass@1 ≥60 %, доля споров, $/задача) — не собираются автоматически; scorecard считает только по своим задачам и ledger.
+10. **Расписание process audit и бюджет в TUI** — не реализованы.
+11. **Файл конфигурации** — `SquadConfig` живёт в коде/конструкторе, YAML/JSON-настроек нет.
 
 ---
 
 ## 14. Ближайшие шаги
 
 1. Решить судьбу `report.status`: либо маппить `blocked/failed` в статус задачи, либо убрать из схемы.
-2. Подключить или удалить мёртвый конфиг: `maxRework`, `softWarnPct`, `hardLimitUsd`.
-3. Поставить тег `v0.9.2` и release notes.
-4. Опционально: image API при валидной image-модели; расписание process audit.
-5. Держать `README`/`PLAN`/`DEVLOG` в синхроне с `bun run verify` и фактическим набором инструментов.
+2. Поставить тег `v0.9.3` и release notes.
+3. Опционально: image API при валидной image-модели; расписание process audit.
+4. Держать `README`/`PLAN`/`DEVLOG` в синхроне с `bun run verify` и фактическим набором инструментов.
 
 ---
 

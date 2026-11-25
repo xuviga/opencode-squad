@@ -13,6 +13,7 @@ function staff(id: string, worktree: string | null): Staff {
     variant: "high",
     sessionID: `ses_${id}`,
     worktreeDirectory: worktree,
+    worktreeBase: null,
     score: 0,
     status: "active",
     reason: null,

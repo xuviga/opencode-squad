@@ -31,9 +31,16 @@ export async function registerMissionTool(ctx: Plugin.Context, store: SquadStore
         additionalProperties: false,
       },
       options: { namespace: "squad", codemode: true },
-      execute: async (input) => {
+      execute: async (input, context) => {
         const args = input as MissionInput;
         try {
+          await ctx.permission.assert({
+            sessionID: context.sessionID,
+            agent: context.agent,
+            source: { type: "tool", messageID: context.messageID, id: context.id },
+            action: "squad_mission",
+            resources: [args.mission_id ?? args.action ?? "*"],
+          });
           switch (args.action) {
             case "create": {
               if (!args.title) throw new Error("title is required for create");

@@ -1,6 +1,6 @@
 {
   "name": "opencode-squad",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "private": true,
   "type": "module",
   "description": "SQUAD — multi-agent orchestrator plugin for OpenCode 2.3.0",
@@ -29,7 +29,7 @@
     "vision:probe": "bun run scripts/vision-probe.ts"
   },
   "dependencies": {
-    "@opencode/plugin": "2.3.0",
+    "@opencode/plugin": "2.4.1",
     "@resvg/resvg-js": "^2.6.2"
   },
   "peerDependencies": {
@@ -40,9 +40,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.7",
-    "@opencode/client": "2.3.0",
-    "@opencode/schema": "2.3.0",
-    "@opencode/theme": "2.3.0",
+    "@opencode/client": "2.4.1",
+    "@opencode/schema": "2.4.1",
+    "@opencode/theme": "2.4.1",
     "@types/bun": "^1.4.3",
     "@types/node": "^22.20.0",
     "effect": "4.1.0",

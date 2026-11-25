@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { DEFAULT_CONFIG } from "../config";
 import type { SquadStore, Staff } from "../db/store";
 import { gradeOrDefault, personaPermissions, resolvePersona } from "../personas";
-import { isGitRepository } from "./git";
+import { isGitRepository, gitHead } from "./git";
 
 export type HireRequest = {
   missionID: string;
@@ -42,6 +42,7 @@ export async function hireEmployee(
   const needsWorktree = mission.isolation !== "none" && spec.access !== "read-only";
 
   let worktreeDirectory: string | null = null;
+  let worktreeBase: string | null = null;
   if (needsWorktree) {
     if (!isGitRepository(ctx.location.directory)) {
       throw new Error(
@@ -55,6 +56,9 @@ export async function hireEmployee(
         name: `squad-${request.persona}-${randomUUID().replace(/-/g, "").slice(0, 6)}`,
       });
       worktreeDirectory = worktree.directory;
+      // Base commit pins the diff baseline: every later commit of the worker is
+      // part of the review, not only the last one.
+      worktreeBase = gitHead(worktree.directory) ?? null;
     } catch (error) {
       throw new Error(
         `worktree isolation failed for ${request.persona}: ${
@@ -119,6 +123,7 @@ export async function hireEmployee(
       variant: model.variant,
       sessionID: session.id,
       worktreeDirectory,
+      worktreeBase,
     });
     return {
       staff,

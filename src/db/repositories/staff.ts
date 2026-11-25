@@ -18,6 +18,7 @@ export class StaffRepository {
     variant: string;
     sessionID: string;
     worktreeDirectory?: string | null;
+    worktreeBase?: string | null;
   }): Staff {
     const id = `s_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
     const timestamp = now();
@@ -25,8 +26,8 @@ export class StaffRepository {
       this.db
         .query(
           `INSERT INTO staff
-           (id, persona, grade, agent, provider, model, variant, session_id, worktree_directory, score, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?)`,
+           (id, persona, grade, agent, provider, model, variant, session_id, worktree_directory, worktree_base, score, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?)`,
         )
         .run(
           id,
@@ -38,6 +39,7 @@ export class StaffRepository {
           input.variant,
           input.sessionID,
           input.worktreeDirectory ?? null,
+          input.worktreeBase ?? null,
           timestamp,
           timestamp,
         );
@@ -84,7 +86,9 @@ export class StaffRepository {
   /** Forgets a removed worktree so finalize/GC do not treat it as live isolation. */
   clearWorktree(staffID: string): Staff {
     this.db
-      .query("UPDATE staff SET worktree_directory = NULL, updated_at = ? WHERE id = ?")
+      .query(
+        "UPDATE staff SET worktree_directory = NULL, worktree_base = NULL, updated_at = ? WHERE id = ?",
+      )
       .run(now(), staffID);
     return this.store.requireStaff(staffID);
   }

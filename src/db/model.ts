@@ -52,6 +52,8 @@ export type Staff = {
   variant: string | null;
   sessionID: string | null;
   worktreeDirectory: string | null;
+  /** Commit the worktree branched from; the diff baseline for the reviewer. */
+  worktreeBase: string | null;
   score: number;
   status: string;
   reason: string | null;
@@ -173,6 +175,7 @@ export type StaffRow = {
   variant: string | null;
   session_id: string | null;
   worktree_directory: string | null;
+  worktree_base: string | null;
   score: number;
   status: string;
   reason: string | null;
@@ -300,6 +303,7 @@ export function mapStaff(row: StaffRow): Staff {
     variant: row.variant,
     sessionID: row.session_id,
     worktreeDirectory: row.worktree_directory,
+    worktreeBase: row.worktree_base ?? null,
     score: row.score,
     status: row.status,
     reason: row.reason,

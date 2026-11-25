@@ -56,10 +56,18 @@ export async function registerPlanTool(ctx: Plugin.Context, store: SquadStore) {
         additionalProperties: false,
       },
       options: { namespace: "squad", codemode: true },
-      execute: async (input) => {
+      execute: async (input, context) => {
         const args = input as PlanInput;
         try {
           if (!args.mission_id) throw new Error("mission_id is required");
+
+          await ctx.permission.assert({
+            sessionID: context.sessionID,
+            agent: context.agent,
+            source: { type: "tool", messageID: context.messageID, id: context.id },
+            action: "squad_plan",
+            resources: [args.mission_id],
+          });
 
           switch (args.action) {
             case "submit": {

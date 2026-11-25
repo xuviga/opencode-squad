@@ -8,6 +8,7 @@ import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
 import { extractLastAssistantText } from "../runtime/messages";
 import { formatDiffForPrompt } from "../runtime/snapshot";
+import { releaseSession } from "../runtime/sessions";
 import { parseVerdictText, requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
 
@@ -199,6 +200,12 @@ async function runTaskAudit(
         ? verdict.findings.map((finding) => `${finding.id}: ${finding.claim}`).join("; ")
         : "second review passed",
   });
+  const reviewerReleased = await releaseSession(ctx, reviewer.sessionID);
+  store.addEvent(missionID, taskID, "session.released", {
+    sessionID: reviewer.sessionID,
+    role: "second_reviewer",
+    released: reviewerReleased,
+  });
 
   return {
     audit,
@@ -206,6 +213,7 @@ async function runTaskAudit(
     task: store.requireTask(missionID, taskID),
     reviewer: reviewer.staff,
     reviewer_session_id: reviewer.sessionID,
+    reviewer_released: reviewerReleased,
     cost: info.cost,
     tokens: info.tokens,
     raw_verdict: rawVerdict,
@@ -300,12 +308,19 @@ async function runProcessAudit(
     verdict: processAudit,
     notes: processAudit.summary,
   });
+  const auditorReleased = await releaseSession(ctx, auditor.sessionID);
+  store.addEvent(missionID, null, "session.released", {
+    sessionID: auditor.sessionID,
+    role: "process_auditor",
+    released: auditorReleased,
+  });
 
   return {
     audit,
     process_audit: processAudit,
     auditor: auditor.staff,
     auditor_session_id: auditor.sessionID,
+    auditor_released: auditorReleased,
     cost: info.cost,
     tokens: info.tokens,
     raw_audit: rawAudit,

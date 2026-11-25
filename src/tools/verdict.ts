@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import type { SquadStore } from "../db/store";
 import { extractLastAssistantText } from "../runtime/messages";
+import { releaseSession } from "../runtime/sessions";
 import { parseVerdictText } from "../verdict";
 import { fail, ok } from "./result";
 
@@ -93,7 +94,14 @@ export async function registerVerdictTool(ctx: Plugin.Context, store: SquadStore
               args.task_id,
               `review wait failed: ${message}`,
             );
-            return ok({ timedOut: true, error: message, task: reset });
+            const released = await releaseSession(ctx, reviewerSessionID);
+            store.addEvent(args.mission_id, args.task_id, "session.released", {
+              sessionID: reviewerSessionID,
+              role: "reviewer",
+              released,
+              reason: "review wait failed",
+            });
+            return ok({ timedOut: true, error: message, task: reset, reviewer_released: released });
           }
 
           const messages = await ctx.session.context({ sessionID: reviewerSessionID });
@@ -127,6 +135,13 @@ export async function registerVerdictTool(ctx: Plugin.Context, store: SquadStore
               args.task_id,
               "invalid reviewer verdict",
             );
+            const released = await releaseSession(ctx, reviewerSessionID);
+            store.addEvent(args.mission_id, args.task_id, "session.released", {
+              sessionID: reviewerSessionID,
+              role: "reviewer",
+              released,
+              reason: "invalid reviewer verdict",
+            });
             return fail(
               new Error(
                 `${error instanceof Error ? error.message : String(error)}. Raw verdict: ${rawVerdict.slice(0, 2000)}`,
@@ -135,11 +150,18 @@ export async function registerVerdictTool(ctx: Plugin.Context, store: SquadStore
           }
 
           task = store.saveVerdict(args.mission_id, args.task_id, verdict);
+          const reviewerReleased = await releaseSession(ctx, reviewerSessionID);
+          store.addEvent(args.mission_id, args.task_id, "session.released", {
+            sessionID: reviewerSessionID,
+            role: "reviewer",
+            released: reviewerReleased,
+          });
           return ok({
             task,
             verdict,
             cost: info.cost,
             tokens: info.tokens,
+            reviewer_released: reviewerReleased,
             raw_verdict: rawVerdict,
           });
         } catch (error) {

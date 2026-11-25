@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.3 — 2026-11-25
+
+- **Human approve gate is real**: `squad_plan` (submit/get/approve/reject) and `squad_mission` now call `permission.assert`; a denied permission leaves the mission in `plan_gate`. Before this, any agent holding the squad tools could approve its own plan.
+- **Worktree diff baseline**: `staff.worktree_base` (migration 010) stores the commit the worktree branched from; the reviewer sees `git diff <base>`, so every worker commit is reviewed, not only the last one. Legacy rows fall back to `HEAD^`.
+- **Integration is all-or-nothing**: a batch cherry-pick records the main HEAD first; a later conflict rewinds main to that commit, unmarks every task merged by this call (`integration.rollback`) and keeps the worktrees for retry. Worktrees are removed only after the whole batch lands.
+- **Helper sessions are released**: the reviewer, second reviewer, process auditor and arbiter sessions are interrupted and removed after their verdict/ruling; the ledger keeps cost and tokens. Invalid verdicts and prompt failures release too.
+- **Live configuration**: `SquadStore` accepts a `SquadConfig`. `maxRework` now drives the escalation gate, `hardLimitUsd` blocks new assignments once a mission is over budget (`budget.hard_limit`), and `softWarnPct` drives the budget radar instead of hardcoded 70/90.
+- **Audit scoping**: `hasAudit` counts only `second_review` audits, so a task legitimately named `mission` is not shadowed by the process audit row.
+- **Failed work is visible**: `squad_tasks` reports `mission_status`, `readiness` and `needs_attention` with failed/escalated/cancelled tasks.
+- **Reviewer prompt contract fixed**: the `squad-reviewer` agent no longer demands `diff + tests` for every class; it follows the class-appropriate check list the orchestrator sends. Both copies (repo and `~/.config/opencode/agent`) are updated.
+- Atomic assignment: the task transition uses a conditional `UPDATE ... WHERE status IN (...)` and fails loudly when the state moved.
+- 107 tests in 23 files (`tests/gates.test.ts` covers config gates, audit scoping, worktree base, batch rollback, permission gates).
+
 ## 0.9.2 — 2026-11-14
 
 - **Reviewer contract tightened**: a `fail` requires severity `high` or `critical` and an unmet acceptance criterion, missing/faked deliverable, or a correctness/security/data-loss defect. Style, naming, formatting and documentation polish are `pass` with findings. Validation rejects low/medium fails.

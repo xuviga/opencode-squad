@@ -5,6 +5,7 @@ import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { extractLastAssistantText } from "../runtime/messages";
 import { formatDiffForPrompt } from "../runtime/snapshot";
+import { releaseSession } from "../runtime/sessions";
 import { fail, ok } from "./result";
 
 type DisputeInput = {
@@ -187,11 +188,18 @@ export async function registerDisputeTool(ctx: Plugin.Context, store: SquadStore
             }
 
             const resolved = store.saveRuling(dispute.id, ruling);
+            const arbiterReleased = await releaseSession(ctx, arbiter.sessionID);
+            store.addEvent(dispute.missionID, dispute.taskID, "session.released", {
+              sessionID: arbiter.sessionID,
+              role: "arbiter",
+              released: arbiterReleased,
+            });
             return ok({
               dispute: resolved,
               ruling,
               arbiter: arbiter.staff,
               arbiter_session_id: arbiter.sessionID,
+              arbiter_released: arbiterReleased,
               cost: info.cost,
               tokens: info.tokens,
             });

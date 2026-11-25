@@ -46,21 +46,21 @@ describe("API drift", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  test("OpenCode packages are pinned to 2.3.0", () => {
+  test("OpenCode packages are pinned to 2.4.1", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
     };
-    expect(pkg.dependencies["@opencode/plugin"]).toBe("2.3.0");
-    expect(pkg.devDependencies["@opencode/client"]).toBe("2.3.0");
-    expect(pkg.devDependencies["@opencode/schema"]).toBe("2.3.0");
-    expect(pkg.devDependencies["@opencode/theme"]).toBe("2.3.0");
+    expect(pkg.dependencies["@opencode/plugin"]).toBe("2.4.1");
+    expect(pkg.devDependencies["@opencode/client"]).toBe("2.4.1");
+    expect(pkg.devDependencies["@opencode/schema"]).toBe("2.4.1");
+    expect(pkg.devDependencies["@opencode/theme"]).toBe("2.4.1");
   });
 
   test("setup registers the full squad tool surface", async () => {
     const registered: string[] = [];
     const fakeCtx = {
-      app: { version: "2.3.0" },
+      app: { version: "2.4.1" },
       location: { directory, project: { id: "test-project" } },
       tool: {
         transform: async (factory: (editor: unknown) => unknown) => {
