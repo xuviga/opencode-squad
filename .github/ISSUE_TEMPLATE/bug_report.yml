@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in SQUAD behaves differently from the documented contract
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: run `bun run verify` and paste the result. Most reports
+        are a failing test or a schema that is one migration behind.
+  - type: input
+    id: version
+    attributes:
+      label: SQUAD version
+      description: From `squad_status` or `src/version.ts`
+      placeholder: "0.9.3"
+    validations:
+      required: true
+  - type: input
+    id: opencode
+    attributes:
+      label: OpenCode version
+      placeholder: "2.4.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: isolation
+    attributes:
+      label: Isolation mode
+      options:
+        - worktree
+        - none (in-place)
+        - not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Tool calls in order, with arguments. Redact tokens and paths only if they matter.
+      placeholder: |
+        1. squad_mission { action: "create", ... }
+        2. squad_plan { action: "submit", ... }
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What the documented contract says should happen, and where it says so.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Response payload, error text, or `bun test` output.
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: Output of bun run verify
+      render: shell

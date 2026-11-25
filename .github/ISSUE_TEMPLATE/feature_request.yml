@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a change to the mission protocol, a tool, or the guarantees
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can you not do today, and what does it cost you?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The smallest change that solves it. Name the tool, transition or document.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Including "do nothing" and what it costs.
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariants
+      description: A proposal that breaks these will be rejected.
+      options:
+        - label: The plan gate stays closed until a human approves (permission.assert is called)
+        - label: Reviewers stay blind and tool-less
+        - label: Integrated work is proven by a commit that is an ancestor of main
+        - label: Fail verdicts keep the high/critical severity floor
