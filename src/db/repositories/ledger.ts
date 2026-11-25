@@ -70,8 +70,7 @@ export class LedgerRepository {
     return { ratio, warnings, anomaly: ratio > 3 };
   }
 
-  budgetSummary(missionID?: string) {
-    if (missionID) {
+  budgetSummary(missionID?: string) {    if (missionID) {
       const mission = this.store.requireMission(missionID);
       const row = this.db
         .query(
@@ -115,6 +114,84 @@ export class LedgerRepository {
         actualCostUsd: mission.actualCostUsd,
         ...this.budgetRadar(mission.expectedCostUsd, mission.actualCostUsd),
       })),
+    };
+  }
+
+  /**
+   * Delivery metrics that mean something: first-pass rate, rework, failure
+   * rate and cost per integrated task. Computed from task rows and the ledger,
+   * so every number can be reproduced from the database.
+   */
+  metrics(missionID?: string) {
+    const missions = missionID
+      ? [this.store.requireMission(missionID)]
+      : this.store.listMissions(100);
+
+    const scopedTasks = missions.flatMap((mission) => this.store.listTasks(mission.id));
+    const integrated = scopedTasks.filter((task) => task.status === "integrated");
+    const failed = scopedTasks.filter(
+      (task) => task.status === "failed" || task.status === "escalated",
+    );
+    const retried = scopedTasks.filter(
+      (task) => task.attempts > 0 || task.status === "returned",
+    );
+    const attemptsTotal = scopedTasks.reduce((sum, task) => sum + task.attempts, 0);
+
+    const costRow = missionID
+      ? (this.db
+          .query("SELECT COALESCE(SUM(cost), 0) AS total FROM ledger WHERE mission_id = ?")
+          .get(missionID) as { total: number })
+      : (this.db.query("SELECT COALESCE(SUM(cost), 0) AS total FROM ledger").get() as {
+          total: number;
+        });
+
+    const auditRows = this.db
+      .query(
+        missionID
+          ? "SELECT status, COUNT(*) AS count FROM audits WHERE mission_id = ? GROUP BY status"
+          : "SELECT status, COUNT(*) AS count FROM audits GROUP BY status",
+      )
+      .all(...(missionID ? [missionID] : [])) as Array<{ status: string; count: number }>;
+    const auditsPass = auditRows.find((row) => row.status === "pass")?.count ?? 0;
+    const auditsFail = auditRows.find((row) => row.status === "fail")?.count ?? 0;
+
+    const disputeRow = this.db
+      .query(
+        missionID
+          ? "SELECT COUNT(*) AS count FROM disputes WHERE mission_id = ?"
+          : "SELECT COUNT(*) AS count FROM disputes",
+      )
+      .get(...(missionID ? [missionID] : [])) as { count: number };
+
+    const firstPass = integrated.filter((task) => task.attempts === 0).length;
+    const durationMinutes = missionID
+      ? Math.max(
+          0,
+          Math.round(
+            (Date.parse(this.store.requireMission(missionID).updatedAt) -
+              Date.parse(this.store.requireMission(missionID).createdAt)) /
+              60_000,
+          ),
+        )
+      : null;
+
+    return {
+      scope: missionID ?? "global",
+      missions: missions.length,
+      tasks: {
+        total: scopedTasks.length,
+        integrated: integrated.length,
+        failed: failed.length,
+        returned: scopedTasks.filter((task) => task.status === "returned").length,
+      },
+      passAt1: integrated.length > 0 ? firstPass / integrated.length : null,
+      reworkRate: scopedTasks.length > 0 ? retried.length / scopedTasks.length : null,
+      averageAttempts: scopedTasks.length > 0 ? attemptsTotal / scopedTasks.length : null,
+      costUsd: costRow.total,
+      costPerIntegratedTaskUsd: integrated.length > 0 ? costRow.total / integrated.length : null,
+      disputes: disputeRow.count,
+      audits: { pass: auditsPass, fail: auditsFail },
+      durationMinutes,
     };
   }
 }

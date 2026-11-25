@@ -53,6 +53,7 @@ function task(overrides: Partial<Task> = {}): Task {
     acceptance: [],
     dependsOn: [],
     capabilities: [],
+    paths: [],
     staffID: null,
     sessionID: null,
     assignedAt: null,

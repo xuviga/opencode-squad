@@ -25,6 +25,8 @@ export type PlanTask = {
   acceptance: string[];
   dependsOn?: string[];
   capabilities?: string[];
+  /** Paths this task owns: exact files, `docs/` prefixes or globs. */
+  paths?: string[];
 };
 
 export type MissionPlan = {
@@ -93,6 +95,12 @@ export function validatePlan(value: unknown): MissionPlan {
         )
       : undefined;
 
+    const paths = Array.isArray(task.paths)
+      ? task.paths.map((item, pathIndex) =>
+          asString(item, `plan.tasks[${index}].paths[${pathIndex}]`),
+        )
+      : undefined;
+
     return {
       id,
       title: asString(task.title, `plan.tasks[${index}].title`),
@@ -102,6 +110,7 @@ export function validatePlan(value: unknown): MissionPlan {
       acceptance,
       dependsOn,
       capabilities,
+      paths,
     };
   });
 

@@ -233,4 +233,12 @@ ALTER TABLE tasks ADD COLUMN snapshot_directory TEXT;
 ALTER TABLE staff ADD COLUMN worktree_base TEXT;
 `,
   },
+  {
+    version: 11,
+    name: "task_paths",
+    sql: `
+ALTER TABLE tasks ADD COLUMN paths_json TEXT;
+UPDATE tasks SET paths_json = '[]' WHERE paths_json IS NULL;
+`,
+  },
 ];

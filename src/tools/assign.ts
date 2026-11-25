@@ -14,6 +14,7 @@ type AssignInput = {
   context?: string[];
   constraints?: Record<string, unknown>;
   capabilities?: string[];
+  paths?: string[];
 };
 
 const REPORT_SCHEMA = {
@@ -43,6 +44,7 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
           staff_id: { type: "string" },
           context: { type: "array", items: { type: "string" } },
           capabilities: { type: "array", items: { type: "string" } },
+          paths: { type: "array", items: { type: "string" } },
           constraints: { type: "object", additionalProperties: true },
         },
         required: ["mission_id", "task_id", "staff_id"],
@@ -79,6 +81,8 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
           );
           const capabilityResolution = await resolveCapabilities(ctx, capabilities);
 
+          const paths = Array.from(new Set([...(task.paths ?? []), ...(args.paths ?? [])]));
+
           const toolBudget = toolBudgetFor(task.class);
           const constraints = taskConstraints(task.class, args.constraints);
 
@@ -95,6 +99,7 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             capabilities,
             capability_resolution: capabilityResolution.resolved,
             output_schema: "report_v1",
+            ...(paths.length > 0 ? { paths } : {}),
             ...(isRework && previousVerdict
               ? {
                   rework: true,

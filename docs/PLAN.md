@@ -1,9 +1,9 @@
 # SQUAD — архитектура и состояние
 
-> Документ: **1.1** · 25.11.2026
-> Код: **0.9.3** (`master`)
+> Документ: **1.2** · 25.11.2026
+> Код: **0.9.4** (`master`)
 > Платформа: **OpenCode 2.4.1** · `@opencode/plugin@2.4.1` · `@opencode/client@2.4.1`
-> Проверка: `bun run verify` — typecheck, biome, **107 тестов в 23 файлах**, 0 fail.
+> Проверка: `bun run verify` — typecheck, biome, **116 тестов в 24 файлах**, 0 fail.
 
 ---
 
@@ -19,7 +19,7 @@
 | M4 worktree, DAG, интеграция | ✅ | worktree, зависимости, `squad_integrate/finalize` |
 | M5 споры и аудит | ✅ | `squad_dispute/audit`, арбитр, process auditor |
 | M6 классы и медиа | ✅ | 10 шаблонов, capabilities, `squad_image/preview/look` |
-| M7 закалка | ✅ 0.8–0.9.3 | gc, split store, CI, in-place, snapshot-diff, late false-pass, lock, batch rollback, live config |
+| M7 закалка | ✅ 0.8–0.9.4 | gc, split store, CI, in-place, snapshot-diff, late false-pass, lock, batch rollback, live config, scope-контроль, метрики |
 | Release tag | ❌ | тега и release notes нет |
 
 29 инструментов. Тесты: 23 файла, 107 кейсов. CI: `.github/workflows/ci.yml`.
@@ -110,6 +110,7 @@ tests/                    22 файла, 98 тестов
 | 008 | tasks.capabilities_json |
 | 009 | missions.isolation, tasks.snapshot_directory |
 | 010 | staff.worktree_base (базовый коммит для diff) |
+| 011 | tasks.paths_json (allowlist файлов задачи) |
 
 ---
 
@@ -297,6 +298,10 @@ Permissions: read-only — deny `edit`, `shell`, `subagent`; write — allow `ed
 | Авто-коммит | `squad_wait` коммитит грязный worktree; ошибка → task `failed` |
 | Бюджет воркера | research 10 tool-calls, остальные 20; stop-policy в brief и промпте |
 | Жёсткий лимит бюджета | `config.hardLimitUsd` блокирует новый assign при перерасходе (`budget.hard_limit`) |
+| Scope задачи | `tasks.paths_json` + `runtime/scope.ts`: diff делится на свои/чужие файлы, ревизор видит allowlist |
+| Проверка worktree | `probeWorktree` на `mission create`; `squad_status` отдаёт `worktreeUsable` |
+| Живучесть БД | общая ручка на проект (`acquireSquadDb`), dispose её не закрывает |
+| Метрики | `metrics()`: pass@1, rework rate, failures, cost per integrated task |
 | In-place lock | один владелец папки; 2h/terminal эвикция |
 
 ---
@@ -357,7 +362,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 
 ## 12. Тесты
 
-23 файла, 107 тестов:
+24 файла, 116 тестов:
 
 | Группа | Файлы |
 |---|---|
@@ -367,7 +372,8 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 | Ревизия | `verdict`, `ruling`, `process-audit` |
 | Интеграция | `integrate`, `evidence`, `gc`, `inplace-lock` |
 | Поведение | `chaos` |
-| Гейты 0.9.3 | `gates` (config, audit scoping, worktree base, batch rollback, permission) |
+| Гейты | `gates` (config, audit scoping, worktree base, batch rollback, permission) |
+| Надёжность 0.9.4 | `reliability` (shared handle, probe, scope-партиционирование, метрики, paths) |
 | Контракты | `api-drift`, `tui`, `preview` |
 
 `bun run verify`: typecheck → biome → test. CI повторяет это на Ubuntu с `--frozen-lockfile`.
@@ -381,12 +387,12 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 1. **`/mission`** — команды в репозитории нет; заявление в CHANGELOG 0.9.2 удалено. Планирование идёт через `squad_mission/plan` (решения принимает модель).
 2. **Детерминированный роутер и `generate.decisions`** — не используются; декомпозиция полностью на боссе.
 3. **`steer`** — `delivery:"steer"` не применяется, только `"queue"`.
-4. **Секреты, allowlist путей, обёртка prompt injection** — фильтрации нет; blind-ревизия ограничена промптом и отсутствием инструментов.
-5. **Автоматический janitor** — только явный `squad_gc`.
-6. **`report.status` → статус задачи** — не маппится.
-7. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
-8. **Release tag/release notes** — отсутствуют.
-9. **Метрики успеха** (pass@1 ≥60 %, доля споров, $/задача) — не собираются автоматически; scorecard считает только по своим задачам и ledger.
+4. **Жёсткое ограничение записи по allowlist** — `paths` задаёт scope для ревью и аудита, но не блокирует запись файла воркером (issue #3).
+5. **Фильтрация секретов и prompt injection** — фильтрации нет; blind-ревизия ограничена промптом и отсутствием инструментов.
+6. **Автоматический janitor** — только явный `squad_gc`.
+7. **`report.status` → статус задачи** — не маппится.
+8. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
+9. **Release tag/release notes** — тег ставится, release workflow есть; первый релиз по нему ещё не прогонялся.
 10. **Расписание process audit и бюджет в TUI** — не реализованы.
 11. **Файл конфигурации** — `SquadConfig` живёт в коде/конструкторе, YAML/JSON-настроек нет.
 

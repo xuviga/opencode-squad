@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { closeSharedHandles } from "../src/db/index";
 
 const EXPECTED_TOOLS = [
   "squad.status",
@@ -43,6 +44,9 @@ describe("API drift", () => {
   });
 
   afterEach(() => {
+    // setup() takes a shared database handle that outlives the plugin instance
+    // on purpose; the test must close it before removing the folder.
+    closeSharedHandles();
     rmSync(directory, { recursive: true, force: true });
   });
 

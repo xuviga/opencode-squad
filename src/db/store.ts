@@ -292,6 +292,10 @@ export class SquadStore {
     return this.ledger.budgetSummary(missionID);
   }
 
+  metrics(missionID?: string) {
+    return this.ledger.metrics(missionID);
+  }
+
   // Disputes and lessons
   openDispute(missionID: string, taskID: string, claim: string, evidence?: unknown): Dispute {
     return this.disputes.openDispute(missionID, taskID, claim, evidence);

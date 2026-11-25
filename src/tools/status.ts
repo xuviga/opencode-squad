@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode/plugin";
 import { DEFAULT_CONFIG, type Grade } from "../config";
 import type { SquadStore } from "../db/store";
 import { isGitRepository } from "../runtime/git";
+import { probeWorktree } from "../runtime/worktree";
 import { VERSION } from "../version";
 
 export type RpcRuntimeState = {
@@ -65,6 +66,9 @@ export async function registerStatusTool(
             limit: model.limit,
           }));
 
+        const worktreeAvailable = isGitRepository(ctx.location.directory);
+        const worktreeProbe = worktreeAvailable ? await probeWorktree(ctx) : { ok: false };
+
         const payload = {
           plugin: "squad",
           version: VERSION,
@@ -79,7 +83,9 @@ export async function registerStatusTool(
           isolation: {
             default: "worktree",
             modes: ["worktree", "none"],
-            worktreeAvailable: isGitRepository(ctx.location.directory),
+            worktreeAvailable,
+            worktreeUsable: worktreeProbe.ok,
+            worktreeProbeError: worktreeProbe.ok ? null : (worktreeProbe.error ?? "not a git repository"),
           },
           counts: {
             models: models.length,

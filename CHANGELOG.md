@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.9.4 — 2026-11-25
 
-- **README "Why"**: a new section states the problem the project answers — an agent grading its own work — and answers it with a real plan gate, isolation and blind review.
-- **Positioning**: `docs/POSITIONING.md` captures the one-line thesis (process with evidence) and the claims the project makes, so the README, docs and metadata stay in one voice.
-- **Metadata**: `package.json` `description` is now one English sentence under 120 characters that matches the README thesis; the version is unchanged.
+- **Shared database handle**: the plugin now opens one SQLite handle per project and never closes it on dispose. A host plugin reload (for example after `session.move`) used to make in-flight tool calls fail with `Cannot use a closed database`.
+- **Worktree capability probe**: `squad_mission create` with `isolation:"worktree"` creates and removes a throwaway worktree first. When the host refuses, the mission is not created and the error says what to do; `squad_status` reports `isolation.worktreeUsable` next to `worktreeAvailable`.
+- **Per-task path allowlist** (issue #3, migration 011): a plan task may declare `paths` (exact file, `docs/` prefix or glob). `squad_assign` accepts extra `paths`, the brief carries them, and the reviewer/auditor partition the diff into owned and sibling files. This removes the false "modified files outside scope" fails that in-place folder diffs produced.
+- **Delivery metrics** (issue #4): `store.metrics()` computes pass@1, rework rate, failure rate, disputes, audits and cost per integrated task straight from task rows and the ledger; `squad_report` prints them and returns them in the payload.
+- **README "Why" / positioning**: a new section and `docs/POSITIONING.md` state the problems the project answers and, in the same voice, what it does not do.
+- **Metadata**: `package.json` description is one English sentence under 120 characters.
+- 116 tests in 24 files (`tests/reliability.test.ts` covers the shared handle, the probe, scope partitioning and metrics).
 
 ## 0.9.3 — 2026-11-25
 

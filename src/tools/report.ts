@@ -38,6 +38,7 @@ export async function registerReportTool(ctx: Plugin.Context, store: SquadStore)
           const plan = store.getPlan(args.mission_id);
           const tasks = store.listTasks(args.mission_id);
           const budget = store.budgetSummary(args.mission_id);
+          const metrics = store.metrics(args.mission_id);
           const staff = store.listStaff(100);
           const events = store.listEvents(args.mission_id, 50);
           const disputes = store.listDisputes(args.mission_id).map((dispute) => ({
@@ -69,6 +70,7 @@ export async function registerReportTool(ctx: Plugin.Context, store: SquadStore)
             `**${mission.title}**`,
             `Status: \`${mission.status}\` · plan v${mission.planVersion}`,
             `Cost: $${budget.actualCostUsd.toFixed(6)} of $${(budget.expectedCostUsd ?? 0).toFixed(6)} expected`,
+            `Delivery: pass@1 ${metrics.passAt1 === null ? "n/a" : `${Math.round(metrics.passAt1 * 100)}%`}, rework ${metrics.reworkRate === null ? "n/a" : `${Math.round(metrics.reworkRate * 100)}%`}, cost per integrated task $${metrics.costPerIntegratedTaskUsd === null ? "n/a" : metrics.costPerIntegratedTaskUsd.toFixed(6)}`,
             "",
             "## Tasks",
             ...taskLines,
@@ -113,6 +115,7 @@ export async function registerReportTool(ctx: Plugin.Context, store: SquadStore)
             tasks: tasks.map(({ brief, rawReport, ...task }) => task),
             staff,
             budget,
+            metrics,
             events,
             disputes,
             audits,

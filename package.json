@@ -1,6 +1,6 @@
 {
   "name": "opencode-squad",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "private": true,
   "type": "module",
   "description": "Multi-agent orchestrator for OpenCode: an evidenced process with plan gate, isolation and blind review.",

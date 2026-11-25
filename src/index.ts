@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin";
-import { openSquadDb } from "./db/index";
+import { acquireSquadDb } from "./db/index";
 import { SquadStore } from "./db/store";
 import { SquadRpc } from "./rpc";
 import { ensureInPlaceLock } from "./runtime/inplace-lock";
@@ -38,7 +38,7 @@ import { VERSION } from "./version";
 export default Plugin.define({
   id: "squad",
   async setup(ctx) {
-    const db = openSquadDb(ctx.location.directory);
+    const { db, release } = acquireSquadDb(ctx.location.directory);
     const store = new SquadStore(db);
     const rpcState: RpcRuntimeState = { registered: false };
 
@@ -122,7 +122,9 @@ export default Plugin.define({
         await registration.dispose();
       }
       await rpcRegistration?.dispose();
-      db.close();
+      // The shared handle stays open: tool calls from a disposed instance may
+      // still be in flight after a plugin reload.
+      release();
     };
   },
 });

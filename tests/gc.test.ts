@@ -36,6 +36,7 @@ function task(id: string, missionID: string): Task {
     acceptance: [],
     dependsOn: [],
     capabilities: [],
+    paths: [],
     staffID: "s_1",
     sessionID: null,
     assignedAt: null,

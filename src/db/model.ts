@@ -74,6 +74,8 @@ export type Task = {
   acceptance: string[];
   dependsOn: string[];
   capabilities: string[];
+  /** Paths this task owns; empty means "no scope declared". */
+  paths: string[];
   staffID: string | null;
   sessionID: string | null;
   assignedAt: string | null;
@@ -196,6 +198,7 @@ export type TaskRow = {
   acceptance_json: string;
   depends_on_json: string;
   capabilities_json: string | null;
+  paths_json: string | null;
   staff_id: string | null;
   session_id: string | null;
   assigned_at: string | null;
@@ -326,6 +329,7 @@ export function mapTask(row: TaskRow): Task {
     acceptance: parseJSON<string[]>(row.acceptance_json) ?? [],
     dependsOn: parseJSON<string[]>(row.depends_on_json) ?? [],
     capabilities: parseJSON<string[]>(row.capabilities_json) ?? [],
+    paths: parseJSON<string[]>(row.paths_json) ?? [],
     staffID: row.staff_id,
     sessionID: row.session_id,
     assignedAt: row.assigned_at,

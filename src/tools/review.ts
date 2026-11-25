@@ -5,6 +5,7 @@ import { taskDiff } from "../runtime/diff";
 import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
 import { formatDiffForPrompt } from "../runtime/snapshot";
+import { allowlistFromBrief, partitionDiff } from "../runtime/scope";
 import { releaseSession } from "../runtime/sessions";
 import { requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
@@ -97,7 +98,8 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
           } catch (error) {
             diff = { error: error instanceof Error ? error.message : String(error) };
           }
-          const diffText = formatDiffForPrompt(diff);
+          const scoped = partitionDiff(diff, allowlistFromBrief(task.brief));
+          const diffText = formatDiffForPrompt(scoped.diff);
           const images = taskImages(ctx, store, task, diff);
           const worktree = (
             diff && typeof diff === "object" ? (diff as {
@@ -118,6 +120,16 @@ export async function registerReviewTool(ctx: Plugin.Context, store: SquadStore)
             ...(mission.isolation === "none"
               ? [
                   "This mission runs in-place (no git worktree and no commit). The diff below is a filesystem snapshot comparison captured before the worker started; judge it as the change set.",
+                ]
+              : []),
+            ...(scoped.allowlist.length > 0
+              ? [
+                  `Allowed paths for this task: ${scoped.allowlist.join(", ")}. Judge only these files. A file outside the allowlist changed by the worker is a scope violation and may be failed.`,
+                  ...(scoped.outOfScope.length > 0
+                    ? [
+                        `Changed but out of scope (sibling work in the same folder, not this worker's deliverable — do not fail this task for them): ${scoped.outOfScope.join(", ")}.`,
+                      ]
+                    : []),
                 ]
               : []),
             "If the class is not code-like there may be no diff; judge the worker report evidence against the acceptance criteria instead.",

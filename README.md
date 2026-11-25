@@ -1,13 +1,13 @@
 # SQUAD
 
 [![CI](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml/badge.svg)](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.9.3-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.9.4-blue.svg)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![OpenCode](https://img.shields.io/badge/OpenCode-2.4.1-000000.svg)](https://opencode.ai)
 
 Мульти-агентный оркестратор для **OpenCode 2.4.1**: босс планирует миссию, нанимает сотрудников в дочерние сессии, проводит слепую ревизию, разрешает споры через арбитра и сливает работу в `main` через изолированные worktree. Организация — машина состояний в SQLite; переходы валидирует плагин, а не модель.
 
-**0.9.3** · 29 инструментов · 107 тестов в 23 файлах · `bun run verify` зелёный (25.11.2026).
+**0.9.4** · 29 инструментов · 116 тестов в 24 файлах · `bun run verify` зелёный (25.11.2026).
 
 ## Why SQUAD
 
@@ -110,7 +110,7 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 
 | Инструмент | Что делает |
 |---|---|
-| `squad_assign` | Task Brief, prompt, `running`; в in-place снимает снапшот |
+| `squad_assign` | Task Brief, prompt, `running`; в in-place снимает снапшот; `paths` задаёт allowlist файлов задачи |
 | `squad_wait` | ждёт idle, сохраняет отчёт, пишет per-session cost/tokens, авто-коммитит грязный worktree |
 | `squad_check` | валидирует Report, прикрепляет к задаче, возвращает рабочий diff |
 | `squad_tasks` | список задач, DAG-зависимости и readiness |
@@ -148,7 +148,7 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 - **Слепая ревизия**: ревизор — отдельный агент без инструментов (`permissions: * deny`, `steps: 2`), грейд на один выше; при G4 берётся `critic` того же грейда. Промпт не содержит рассуждений исполнителя.
 - **Класс-зависимые проверки**: `code/data/ops` требуют `checked: diff+tests` (в in-place — `diff+acceptance`); остальные классы — `acceptance+evidence`.
 - **Вердикт**: `fail` только при severity `high`/`critical` и хотя бы одном finding с evidence; `pass` обязан перечислить требуемые проверки. Мелкие замечания → `pass` с findings.
-- **Rework**: лимит 2 зашит в store (`attempts > 2`); вердикт `fail` возвращает задачу в `returned`.
+- **Rework**: `attempts > config.maxRework` → `escalated`; вердикт `fail` возвращает задачу в `returned`.
 - **Свежесть отчёта**: review/check отклоняют отчёт, снятый до `assigned_at`; после rework нужен новый `squad_wait`.
 - **Интеграция**: `squad_integrate` отказывается работать на грязном `main`; при конфликте `abort` оставляет main чистым, `theirs` разрешает конфликт в пользу воркера. Батч all-or-nothing: если второй cherry-pick упал, main откатывается к HEAD до батча, задачи этого вызова размечаются как неслитые (`integration.rollback`), worktree остаются для повтора. Worktree удаляются только после успеха всего батча.
 - **Базовый коммит воркера**: `staff.worktree_base` (миграция 010) фиксирует коммит, от которого создан worktree; ревизор и аудит видят `git diff <base>`, то есть **все** коммиты воркера, а не только последний.
@@ -160,6 +160,10 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 - **In-place lock**: `.squad/locks/inplace.json`; acquire на approve, release на finalize/cancel, эвикция через 2 часа или терминального holder'а.
 - **Бюджет воркера**: research — 10 tool-calls, остальные — 20; при исчерпании — `report.status=blocked` с частичными evidence. Бюджет прописан в brief и промпте.
 - **Авто-коммит**: `squad_wait` коммитит грязный worktree после отчёта, поэтому writer/designer без shell всё равно интегрируются; ошибка коммита валит задачу.
+- **Scope задачи**: `paths` в плане или в `squad_assign` (точный файл, `docs/`, `src/**/*.ts`) делит diff на «свои» и «чужие» файлы; ревизор и аудитор видят allowlist и не валят задачу за изменения соседей в той же папке.
+- **Проверка worktree**: `squad_mission create` с `isolation:"worktree"` сначала создаёт и удаляет пробный worktree; если хост не умеет — миссия не создаётся, а `squad_status` отдаёт `isolation.worktreeUsable`.
+- **Метрики**: `store.metrics()` и `squad_report` считают pass@1, rework rate, долю падений, споры, аудиты и стоимость на интегрированную задачу — всё выводимо из задач и ledger.
+- **Живучесть БД**: одна SQLite-ручка на проект, не закрывается при dispose, поэтому reload плагина не рвёт вызовы в полёте.
 
 ## Данные на диске
 

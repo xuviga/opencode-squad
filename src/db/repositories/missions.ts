@@ -118,8 +118,8 @@ export class MissionRepository {
 
       const insertTask = this.db.query(
         `INSERT INTO tasks
-         (mission_id, id, title, class, role, grade, status, acceptance_json, depends_on_json, capabilities_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (mission_id, id, title, class, role, grade, status, acceptance_json, depends_on_json, capabilities_json, paths_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const task of plan.tasks) {
         insertTask.run(
@@ -133,6 +133,7 @@ export class MissionRepository {
           JSON.stringify(task.acceptance),
           JSON.stringify(task.dependsOn ?? []),
           JSON.stringify(task.capabilities ?? []),
+          JSON.stringify(task.paths ?? []),
           timestamp,
           timestamp,
         );

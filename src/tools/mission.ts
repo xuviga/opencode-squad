@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode/plugin";
 import type { Isolation } from "../db/model";
 import type { SquadStore } from "../db/store";
 import { isGitRepository } from "../runtime/git";
+import { probeWorktree } from "../runtime/worktree";
 import { fail, ok } from "./result";
 
 type MissionInput = {
@@ -53,8 +54,25 @@ export async function registerMissionTool(ctx: Plugin.Context, store: SquadStore
                     `(weaker isolation: no worktrees, reviews use filesystem snapshots).`,
                 );
               }
+              let probe: Awaited<ReturnType<typeof probeWorktree>> | undefined;
+              if (isolation === "worktree") {
+                probe = await probeWorktree(ctx);
+                if (!probe.ok) {
+                  throw new Error(
+                    `The host cannot create a git worktree for this project (${probe.error ?? "unknown error"}). ` +
+                      `The folder is a git repository, so this is a host capability failure: a stale worktree ` +
+                      `registry entry or a disposed session can cause it. Check the host worktree list, or start ` +
+                      `this mission with isolation:"none" (employees write in the folder, reviews use snapshots).`,
+                  );
+                }
+              }
               const mission = store.createMission(args.title, args.goal ?? "", isolation);
-              return ok({ mission, mission_id: mission.id, isolation: mission.isolation });
+              return ok({
+                mission,
+                mission_id: mission.id,
+                isolation: mission.isolation,
+                ...(probe?.ok ? { worktree_probe: probe.directory } : {}),
+              });
             }
             case "list":
               return ok({ missions: store.listMissions() });

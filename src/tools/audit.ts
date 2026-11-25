@@ -8,6 +8,7 @@ import { hireEmployee } from "../runtime/hire";
 import { taskImages } from "../runtime/images";
 import { extractLastAssistantText } from "../runtime/messages";
 import { formatDiffForPrompt } from "../runtime/snapshot";
+import { allowlistFromBrief, partitionDiff } from "../runtime/scope";
 import { releaseSession } from "../runtime/sessions";
 import { parseVerdictText, requiredChecks } from "../verdict";
 import { fail, ok } from "./result";
@@ -107,6 +108,7 @@ async function runTaskAudit(
   }
 
   const images = taskImages(ctx, store, task, diff);
+  const scoped = partitionDiff(diff, allowlistFromBrief(task.brief));
 
   const prompt = [
     `You are SQUAD second reviewer at grade ${reviewerGrade}.`,
@@ -123,6 +125,16 @@ async function runTaskAudit(
         ]
       : []),
     `This task is class "${task.class}". Required checks for a pass: ${checks.join(", ")}.`,
+    ...(scoped.allowlist.length > 0
+      ? [
+          `Allowed paths for this task: ${scoped.allowlist.join(", ")}.`,
+          ...(scoped.outOfScope.length > 0
+            ? [
+                `Changed but out of scope (sibling work, not this worker's deliverable): ${scoped.outOfScope.join(", ")}.`,
+              ]
+            : []),
+        ]
+      : []),
     ...(mission.isolation === "none"
       ? [
           "This mission runs in-place: there is no git commit. The diff is a filesystem snapshot comparison; judge it as the change set.",
@@ -150,7 +162,7 @@ async function runTaskAudit(
     "Worker Report:",
     task.rawReport ?? "(none)",
     "Diff:",
-    formatDiffForPrompt(diff),
+    formatDiffForPrompt(scoped.diff),
   ].join("\n\n");
 
   await ctx.session.prompt({

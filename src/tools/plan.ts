@@ -42,6 +42,7 @@ export async function registerPlanTool(ctx: Plugin.Context, store: SquadStore) {
                     acceptance: { type: "array", items: { type: "string" } },
                     dependsOn: { type: "array", items: { type: "string" } },
                     capabilities: { type: "array", items: { type: "string" } },
+                    paths: { type: "array", items: { type: "string" } },
                   },
                   required: ["id", "title", "class", "role", "grade", "acceptance"],
                   additionalProperties: false,
