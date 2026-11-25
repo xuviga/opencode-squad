@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { acquireSquadDb, closeSharedHandles, openSquadDb, sharedHandleCount } from "../src/db/index";
 import { SquadStore } from "../src/db/store";
-import { pathMatches, partitionDiff, scopeViolations } from "../src/runtime/scope";
+import {
+  attributeInPlace,
+  pathMatches,
+  partitionDiff,
+  scopeViolations,
+} from "../src/runtime/scope";
 import { probeWorktree, resetWorktreeProbeCache } from "../src/runtime/worktree";
 
 describe("shared database handle", () => {
@@ -86,6 +91,27 @@ describe("path allowlist", () => {
     };
     expect(scopeViolations(["src/", "docs/"], diff)).toEqual(["README.md"]);
     expect(scopeViolations([], diff)).toEqual([]);
+  });
+
+  test("in-place attribution separates mine, sibling and unclaimed files", () => {
+    const diff = {
+      data: [{ file: "src/a.ts" }, { file: "docs/b.md" }, { file: "secret.txt" }],
+    };
+    const result = attributeInPlace(diff, ["src/"], [
+      { id: "other", paths: ["docs/"], concurrent: true },
+    ]);
+    expect(result.mine).toEqual(["src/a.ts"]);
+    expect(result.siblingFiles).toEqual(["docs/b.md"]);
+    expect(result.unclaimed).toEqual(["secret.txt"]);
+    expect(result.enforceable).toBe(true);
+  });
+
+  test("attribution is advisory when a concurrent writer declares no paths", () => {
+    const diff = { data: [{ file: "src/a.ts" }] };
+    const result = attributeInPlace(diff, ["src/"], [
+      { id: "wild", paths: [], concurrent: true },
+    ]);
+    expect(result.enforceable).toBe(false);
   });
 });
 

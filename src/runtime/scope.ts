@@ -124,3 +124,61 @@ export function scopeViolations(allowlist: readonly string[], diff: unknown): st
   if (allowlist.length === 0) return [];
   return partitionDiff(diff, allowlist).outOfScope;
 }
+
+export type SiblingScope = {
+  id: string;
+  paths: readonly string[];
+  /** Still able to write into the folder. */
+  concurrent: boolean;
+};
+
+export type InPlaceAttribution = {
+  mine: string[];
+  siblingFiles: string[];
+  /** Changed by nobody's declared scope: this worker's violation. */
+  unclaimed: string[];
+  /** False when some concurrent writer declared no paths. */
+  enforceable: boolean;
+};
+
+/**
+ * Attributes a folder-wide in-place diff using every task's allowlist.
+ *
+ * A file is this worker's when it matches the task's own paths, a sibling's
+ * when a concurrent sibling claims it, and unclaimed otherwise — which means
+ * the worker wrote something it did not declare. Attribution is only sound
+ * when every concurrent writer declared paths; otherwise it stays advisory.
+ */
+export function attributeInPlace(
+  diff: unknown,
+  allowlist: readonly string[],
+  siblings: readonly SiblingScope[],
+): InPlaceAttribution {
+  const files = (entriesOf(diff) ?? []).map((entry) => entry.file ?? "unknown");
+  const mine: string[] = [];
+  const siblingFiles: string[] = [];
+  const unclaimed: string[] = [];
+
+  for (const file of files) {
+    if (allowlist.some((pattern) => pathMatches(file, pattern))) {
+      mine.push(file);
+      continue;
+    }
+    const owner = siblings.find(
+      (sibling) => sibling.concurrent && sibling.paths.some((pattern) => pathMatches(file, pattern)),
+    );
+    if (owner) siblingFiles.push(file);
+    else unclaimed.push(file);
+  }
+
+  const concurrentWriterWithoutPaths = siblings.some(
+    (sibling) => sibling.concurrent && sibling.paths.length === 0,
+  );
+
+  return {
+    mine,
+    siblingFiles,
+    unclaimed,
+    enforceable: allowlist.length > 0 && !concurrentWriterWithoutPaths,
+  };
+}

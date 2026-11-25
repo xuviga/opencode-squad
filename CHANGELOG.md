@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.6 — 2026-11-25
+
+- **In-place attribution** (issue #5): a folder-wide snapshot diff can now be attributed. A changed file is the worker's when it matches their `paths`, a sibling's when a concurrent sibling claims it, and unclaimed otherwise. `squad_wait` fails the task on unclaimed files (`task.scope_violation`), records `task.scope_siblings` for the rest, and emits `task.scope_unverifiable` when a concurrent writer declared no paths — the guarantee is stated, not assumed.
+- **Scope enforcement is no longer worktree-only**: the same rule covers `isolation:"none"` whenever every writing task declares paths.
+- 119 tests (`tests/reliability.test.ts` covers attribution and the advisory fallback).
+
 ## 0.9.5 — 2026-11-25
 
 - **Scope is enforced in worktree missions** (issue #3): after the worker reports, `squad_wait` runs `git diff` against the task's allowlist and fails the task when a file outside `paths` changed. The event is `task.scope_violation` and the payload lists the files and the allowlist. In `isolation:"none"` the snapshot diff is folder-wide and cannot attribute authorship, so the allowlist stays advisory there and the reviewer is told which files are sibling work.

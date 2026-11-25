@@ -3,7 +3,7 @@ import type { SquadStore } from "../db/store";
 import { commitWorktree, type WorktreeCommit } from "../runtime/commit";
 import { taskDiff } from "../runtime/diff";
 import { extractLastAssistantText } from "../runtime/messages";
-import { allowlistFromBrief, scopeViolations } from "../runtime/scope";
+import { allowlistFromBrief, attributeInPlace, scopeViolations } from "../runtime/scope";
 import { fail, ok } from "./result";
 
 type WaitInput = {
@@ -165,30 +165,64 @@ export async function registerWaitTool(ctx: Plugin.Context, store: SquadStore) {
           }
 
           const allowlist = allowlistFromBrief(task.brief);
-          if (staff?.worktreeDirectory && allowlist.length > 0) {
-            let violations: string[] = [];
+          if (allowlist.length > 0) {
+            let diff: unknown;
             try {
-              violations = scopeViolations(allowlist, await taskDiff(ctx, store, task));
+              diff = await taskDiff(ctx, store, task);
             } catch {
-              violations = [];
+              diff = undefined;
             }
-            if (violations.length > 0) {
-              store.addEvent(args.mission_id, args.task_id, "task.scope_violation", {
-                files: violations,
-                allowlist,
-              });
-              const failed = store.failTask(
-                args.mission_id,
-                args.task_id,
-                `scope violation: changed files outside the allowlist: ${violations.slice(0, 20).join(", ")}`,
-              );
-              return ok({
-                timedOut: false,
-                task: failed,
-                error: "scope violation",
-                scope_violation: violations,
-                allowlist,
-              });
+            if (diff) {
+              const mission = store.requireMission(args.mission_id);
+              let violations: string[] = [];
+              if (staff?.worktreeDirectory) {
+                violations = scopeViolations(allowlist, diff);
+              } else if (mission.isolation === "none") {
+                const siblings = store
+                  .listTasks(args.mission_id)
+                  .filter(
+                    (candidate) =>
+                      candidate.id !== task.id &&
+                      ["assigned", "running", "submitted", "in_review"].includes(candidate.status),
+                  )
+                  .map((candidate) => ({
+                    id: candidate.id,
+                    paths: candidate.paths,
+                    concurrent: true,
+                  }));
+                const attribution = attributeInPlace(diff, allowlist, siblings);
+                if (!attribution.enforceable) {
+                  store.addEvent(args.mission_id, args.task_id, "task.scope_unverifiable", {
+                    allowlist,
+                    reason: "a concurrent writer declared no paths",
+                  });
+                } else {
+                  violations = attribution.unclaimed;
+                  if (attribution.siblingFiles.length > 0) {
+                    store.addEvent(args.mission_id, args.task_id, "task.scope_siblings", {
+                      files: attribution.siblingFiles,
+                    });
+                  }
+                }
+              }
+              if (violations.length > 0) {
+                store.addEvent(args.mission_id, args.task_id, "task.scope_violation", {
+                  files: violations,
+                  allowlist,
+                });
+                const failed = store.failTask(
+                  args.mission_id,
+                  args.task_id,
+                  `scope violation: changed files outside the allowlist: ${violations.slice(0, 20).join(", ")}`,
+                );
+                return ok({
+                  timedOut: false,
+                  task: failed,
+                  error: "scope violation",
+                  scope_violation: violations,
+                  allowlist,
+                });
+              }
             }
           }
 

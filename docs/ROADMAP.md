@@ -6,6 +6,11 @@ that cannot be expressed as a guarded transition does not go in.
 
 ## Shipped
 
+- **0.9.6** — in-place attribution: a folder-wide diff is attributed using
+  every concurrent task's allowlist; unclaimed files fail the task, and the
+  guarantee is downgraded to advisory (with an event) when a concurrent writer
+  declared no paths (issue
+  [#5](https://github.com/xuviga/opencode-squad/issues/5)).
 - **0.9.5** — scope enforcement in worktree missions: `squad_wait` fails a task
   whose diff touches a file outside `paths` (`task.scope_violation`), before a
   reviewer is hired (issue [#3](https://github.com/xuviga/opencode-squad/issues/3)).
@@ -33,10 +38,9 @@ that cannot be expressed as a guarded transition does not go in.
 
 ## Next (0.10)
 
-- **Attribute in-place writes.** The allowlist is enforced in worktree
-  missions; in `isolation:"none"` a folder-wide snapshot diff cannot say who
-  wrote a file. Per-task file locks or a pre-report ownership check would make
-  the same guarantee hold without git.
+- **Per-task write locks.** Attribution (0.9.6) tells the truth after the
+  fact; locks would refuse the conflict at assign time. Useful when two tasks
+  legitimately need the same directory.
 - **Configuration file.** `SquadConfig` is live but lives in code. A
   `.squad/config.json` (grades, budgets, rework limit, stale window) with
   validation and a documented precedence order.
