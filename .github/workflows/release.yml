@@ -31,8 +31,11 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           NOTES="docs/releases/${TAG}.md"
-          if [ -f "$NOTES" ]; then
-            gh release create "$TAG" --title "SQUAD ${TAG#v}" --notes-file "$NOTES"
+          TITLE="SQUAD ${TAG#v}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES"
+          elif [ -f "$NOTES" ]; then
+            gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES"
           else
-            gh release create "$TAG" --title "SQUAD ${TAG#v}" --generate-notes
+            gh release create "$TAG" --title "$TITLE" --generate-notes
           fi
