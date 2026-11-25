@@ -113,7 +113,9 @@ export async function registerAssignTool(ctx: Plugin.Context, store: SquadStore)
             `You are SQUAD ${staff.persona} at grade ${staff.grade}.`,
             isRework
               ? "This is a rework. Address every finding from the previous verdict and provide the actual deliverable, not a description of it."
-              : "Complete the task described in the Task Brief below.",
+              : task.status === "blocked"
+                ? "This task was blocked earlier. The boss has re-issued it with new context; the block reason did not spend a rework attempt."
+                : "Complete the task described in the Task Brief below.",
             "Return ONLY one JSON object, without markdown fences, matching this schema:",
             JSON.stringify(REPORT_SCHEMA, null, 2),
           ];

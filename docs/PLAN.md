@@ -1,9 +1,9 @@
 # SQUAD — архитектура и состояние
 
-> Документ: **1.4** · 25.11.2026
-> Код: **0.9.6** (`master`)
+> Документ: **1.5** · 25.11.2026
+> Код: **0.9.7** (`master`)
 > Платформа: **OpenCode 2.4.1** · `@opencode/plugin@2.4.1` · `@opencode/client@2.4.1`
-> Проверка: `bun run verify` — typecheck, biome, **119 тестов в 24 файлах**, 0 fail.
+> Проверка: `bun run verify` — typecheck, biome, **120 тестов в 24 файлах**, 0 fail.
 
 ---
 
@@ -139,7 +139,7 @@ pending → ready → running → submitted → in_review → integrated
                      └→ cancelled (abort миссии)
 ```
 
-`report.status: done | blocked | failed` валидируется и сохраняется в `report_json`, но **не** меняет статус задачи. Задачу закрывает только вердикт: `pass → integrated`, `fail → returned`. `failed` ставит `wait` при timeout/crash или `assign` при ошибке prompt. `squad_tasks` показывает `needs_attention` со списком failed/escalated/cancelled задач, чтобы миссия не «висела» молча.
+`report.status: done | blocked | failed` применяется в `squad_check`: `blocked → blocked` (без траты rework и без запуска ревью), `failed → failed`, `done → submitted`. Задачу закрывает только вердикт: `pass → integrated`, `fail → returned`. `failed` также ставит `wait` при timeout/crash или `assign` при ошибке prompt. `squad_tasks` показывает `needs_attention` со списком failed/escalated/blocked/cancelled задач, чтобы миссия не «висела» молча.
 
 ---
 
@@ -362,7 +362,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 
 ## 12. Тесты
 
-24 файла, 119 тестов:
+24 файла, 120 тестов:
 
 | Группа | Файлы |
 |---|---|
@@ -390,7 +390,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 4. **Атрибуция записи в in-place** — реализована через allowlist всех параллельных задач (0.9.6); жёсткой блокировки записи нет, поэтому при необъявленных `paths` у соседа гарантия честно понижается до совещательной (`task.scope_unverifiable`).
 5. **Фильтрация секретов и prompt injection** — фильтрации нет; blind-ревизия ограничена промптом и отсутствием инструментов.
 6. **Автоматический janitor** — только явный `squad_gc`.
-7. **`report.status` → статус задачи** — не маппится.
+7. **`report.status` → статус задачи** — реализовано в 0.9.7; отдельного статуса `blocked` больше не нужно ждать.
 8. **Image API** — зависит от внешней image-модели; у DeepSeek её нет.
 9. **Release tag/release notes** — тег ставится, release workflow есть; первый релиз по нему ещё не прогонялся.
 10. **Расписание process audit и бюджет в TUI** — не реализованы.
@@ -400,7 +400,7 @@ Capabilities: `skill:<id>`, `mcp:<server>`, `tool:<name>` и bare-имена; `s
 
 ## 14. Ближайшие шаги
 
-1. Решить судьбу `report.status`: либо маппить `blocked/failed` в статус задачи, либо убрать из схемы.
+1. Поставить тег `v0.9.7` и release notes (тег ставится в этом релизе).
 2. Поставить тег `v0.9.3` и release notes.
 3. Опционально: image API при валидной image-модели; расписание process audit.
 4. Держать `README`/`PLAN`/`DEVLOG` в синхроне с `bun run verify` и фактическим набором инструментов.

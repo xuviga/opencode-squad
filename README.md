@@ -1,13 +1,13 @@
 # SQUAD
 
 [![CI](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml/badge.svg)](https://github.com/xuviga/opencode-squad/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.9.6-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.9.7-blue.svg)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![OpenCode](https://img.shields.io/badge/OpenCode-2.4.1-000000.svg)](https://opencode.ai)
 
 Мульти-агентный оркестратор для **OpenCode 2.4.1**: босс планирует миссию, нанимает сотрудников в дочерние сессии, проводит слепую ревизию, разрешает споры через арбитра и сливает работу в `main` через изолированные worktree. Организация — машина состояний в SQLite; переходы валидирует плагин, а не модель.
 
-**0.9.6** · 29 инструментов · 119 тестов в 24 файлах · `bun run verify` зелёный (25.11.2026).
+**0.9.7** · 29 инструментов · 120 тестов в 24 файлах · `bun run verify` зелёный (25.11.2026).
 
 ## Why SQUAD
 
@@ -140,7 +140,7 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 
 Миссия: `draft → plan_gate → staffing → executing → reviewing → integrating → done`, терминальные — `done | failed | aborted`. `planning` объявлен в модели, но код в него не переводит. `failed` ставится поздним false-pass аудитом, `aborted` — `squad_cancel`.
 
-Задача: `pending → ready → running → submitted → in_review → returned → integrated`, плюс `failed` (timeout/crash/prompt failure) и `cancelled` (abort миссии). `report.status: blocked | failed` валидируется и сохраняется, но статус задачи по нему не меняется — задачу закрывает вердикт ревизора.
+Задача: `pending → ready → running → submitted → in_review → returned → integrated`, плюс `failed` (timeout/crash/prompt failure), `blocked` (воркер сообщил `report.status: blocked`) и `cancelled` (abort миссии). `report.status` теперь двигает задачу: `blocked → blocked` без траты rework, `failed → failed`, `done → submitted`. Блокированную задачу босс переиздаёт через `squad_assign` с новым контекстом.
 
 ## Что реально проверяется
 
@@ -161,6 +161,7 @@ TUI: `/squad` открывает панель; `a` — approve, `r` — reject, 
 - **Бюджет воркера**: research — 10 tool-calls, остальные — 20; при исчерпании — `report.status=blocked` с частичными evidence. Бюджет прописан в brief и промпте.
 - **Авто-коммит**: `squad_wait` коммитит грязный worktree после отчёта, поэтому writer/designer без shell всё равно интегрируются; ошибка коммита валит задачу.
 - **Scope задачи**: `paths` в плане или в `squad_assign` (точный файл, `docs/`, `src/**/*.ts`) делит diff на «свои» и «чужие» файлы; ревизор и аудитор видят allowlist и не валят задачу за изменения соседей в той же папке.
+- **Отчёт двигает задачу**: `squad_check` применяет `report.status`: `blocked` → задача `blocked` (rework не тратится, ревью не начинается), `failed` → `failed`, `done` → `submitted`.
 - **Scope-энфорсмент**: `squad_wait` валит задачу за файл вне allowlist. В worktree — по своему diff; в in-place — по атрибуции: файл «свой», «соседский» (если его заявляет параллельная задача) или «ничей» (нарушение). Если параллельный писатель не объявил `paths`, атрибуция честно помечается `task.scope_unverifiable` и остаётся совещательной.
 - **Проверка worktree**: `squad_mission create` с `isolation:"worktree"` сначала создаёт и удаляет пробный worktree; если хост не умеет — миссия не создаётся, а `squad_status` отдаёт `isolation.worktreeUsable`.
 - **Метрики**: `store.metrics()` и `squad_report` считают pass@1, rework rate, долю падений, споры, аудиты и стоимость на интегрированную задачу — всё выводимо из задач и ledger.

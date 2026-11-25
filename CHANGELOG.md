@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.7 — 2026-11-25
+
+- **The report moves the task** (issue #2): `squad_check` now applies `report.status`. `blocked` moves the task to `blocked` without spending a rework attempt and without starting a review; `failed` moves it to `failed`; `done` keeps the old path to `submitted`. A blocked task is re-issued with `squad_assign`, and the worker prompt says the block did not cost an attempt.
+- `squad_tasks` counts `blocked` as needing attention; `squad_review` already refuses anything that is not `submitted`.
+- 120 tests (`tests/reliability.test.ts` covers the blocked transition and reassignment).
+
 ## 0.9.6 — 2026-11-25
 
 - **In-place attribution** (issue #5): a folder-wide snapshot diff can now be attributed. A changed file is the worker's when it matches their `paths`, a sibling's when a concurrent sibling claims it, and unclaimed otherwise. `squad_wait` fails the task on unclaimed files (`task.scope_violation`), records `task.scope_siblings` for the rest, and emits `task.scope_unverifiable` when a concurrent writer declared no paths — the guarantee is stated, not assumed.

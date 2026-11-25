@@ -68,6 +68,28 @@ export async function registerCheckTool(ctx: Plugin.Context, store: SquadStore) 
             );
           }
 
+          if (report.status === "blocked") {
+            const blocked = store.blockTask(
+              args.mission_id,
+              args.task_id,
+              report.summary,
+            );
+            return ok({
+              task: blocked,
+              report,
+              blocked: true,
+              next: "reassign with squad_assign when the blocker is resolved; attempts were not spent",
+            });
+          }
+          if (report.status === "failed") {
+            const failed = store.failTask(
+              args.mission_id,
+              args.task_id,
+              `worker reported failure: ${report.summary}`,
+            );
+            return ok({ task: failed, report, failed: true });
+          }
+
           const completed = store.completeTask(args.mission_id, args.task_id, report);
           const diff = await taskDiff(ctx, store, completed);
           return ok({

@@ -46,7 +46,7 @@ export class TaskRepository {
       throw new Error(`cannot assign task in mission status ${mission.status}`);
     }
     const task = this.requireTask(missionID, taskID);
-    if (!["ready", "failed", "returned"].includes(task.status)) {
+    if (!["ready", "failed", "returned", "blocked"].includes(task.status)) {
       throw new Error(
         task.status === "pending"
           ? `task is not ready; dependencies are not integrated: ${taskID}`
@@ -105,7 +105,7 @@ export class TaskRepository {
           `UPDATE tasks
            SET status = 'assigned', staff_id = ?, session_id = ?, brief_json = ?,
                assigned_at = ?, attempts = ?, updated_at = ?
-           WHERE mission_id = ? AND id = ? AND status IN ('ready', 'failed', 'returned')`,
+           WHERE mission_id = ? AND id = ? AND status IN ('ready', 'failed', 'returned', 'blocked')`,
         )
         .run(
           staffID,
@@ -285,8 +285,7 @@ export class TaskRepository {
     return this.requireTask(missionID, taskID);
   }
 
-  /** In-place isolation: the work already lives in the project directory. */
-  markMergedInPlace(missionID: string, taskID: string): Task {
+  /** In-place isolation: the work already lives in the project directory. */  markMergedInPlace(missionID: string, taskID: string): Task {
     const task = this.requireTask(missionID, taskID);
     if (task.status !== "integrated") {
       throw new Error(`cannot merge task in status ${task.status}`);
@@ -345,7 +344,25 @@ export class TaskRepository {
     return this.requireTask(missionID, taskID);
   }
 
-  failTask(missionID: string, taskID: string, reason: string): Task {    const timestamp = now();
+  /**
+   * A worker reported `status: "blocked"`. The task waits for a human decision
+   * instead of drifting into review with no deliverable. It does not spend a
+   * rework attempt: being blocked is not the worker's failure.
+   */
+  blockTask(missionID: string, taskID: string, reason: string): Task {
+    const timestamp = now();
+    this.db
+      .query(
+        `UPDATE tasks SET status = 'blocked', updated_at = ?
+         WHERE mission_id = ? AND id = ?`,
+      )
+      .run(timestamp, missionID, taskID);
+    this.store.addEvent(missionID, taskID, "task.blocked", { reason });
+    return this.requireTask(missionID, taskID);
+  }
+
+  failTask(missionID: string, taskID: string, reason: string): Task {
+    const timestamp = now();
     this.db
       .query(
         `UPDATE tasks SET status = 'failed', updated_at = ?

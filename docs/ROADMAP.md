@@ -6,6 +6,9 @@ that cannot be expressed as a guarded transition does not go in.
 
 ## Shipped
 
+- **0.9.7** — the report moves the task: `blocked` becomes a task state
+  without spending rework, `failed` fails the task, `done` submits it (issue
+  [#2](https://github.com/xuviga/opencode-squad/issues/2)).
 - **0.9.6** — in-place attribution: a folder-wide diff is attributed using
   every concurrent task's allowlist; unclaimed files fail the task, and the
   guarantee is downgraded to advisory (with an event) when a concurrent writer
@@ -29,10 +32,6 @@ that cannot be expressed as a guarded transition does not go in.
 
 - Keep the reviewer contract honest: a pass must name the checks its class
   requires, and a fail must clear the severity floor.
-- Close the remaining holes in the report flow: `report.status` is validated
-  and stored, but it still does not move a task. Either map `blocked`/`failed`
-  to a task state or drop the field — tracked in
-  [#2](https://github.com/xuviga/opencode-squad/issues/2).
 - Keep `README.md`, `docs/PLAN.md` and the real tool surface in sync. Every
   release ships with a checked `bun run verify` line and the test count.
 

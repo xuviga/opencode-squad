@@ -161,6 +161,63 @@ describe("metrics", () => {
   });
 });
 
+describe("blocked reports", () => {
+  let directory: string;
+  let db: Database;
+  let store: SquadStore;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), "squad-blocked-"));
+    db = openSquadDb(directory);
+    store = new SquadStore(db);
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  test("a blocked task keeps its attempts and can be reassigned", () => {
+    const mission = store.createMission("blocked", "", "none");
+    store.submitPlan(mission.id, {
+      goal: "blocked",
+      tasks: [
+        {
+          id: "t1",
+          title: "blocked work",
+          class: "code",
+          role: "implementer",
+          grade: "G1",
+          acceptance: ["ok"],
+        },
+      ],
+    });
+    store.approvePlan(mission.id);
+    const staff = store.hireStaff({
+      persona: "implementer",
+      grade: "G1",
+      agent: "build",
+      provider: "deepseek",
+      model: "deepseek-flash",
+      variant: "low",
+      sessionID: "ses_blocked",
+    });
+    store.assignTask(mission.id, "t1", staff.id, { goal: "x" });
+    store.markTaskRunning(mission.id, "t1");
+
+    const blocked = store.blockTask(mission.id, "t1", "missing credentials");
+    expect(blocked.status).toBe("blocked");
+    expect(blocked.attempts).toBe(0);
+    expect(() => store.assignReview(mission.id, "t1", staff.id, "ses_reviewer")).toThrow(
+      "cannot review task in status blocked",
+    );
+
+    const reassigned = store.assignTask(mission.id, "t1", staff.id, { goal: "y" });
+    expect(reassigned.status).toBe("assigned");
+    expect(reassigned.attempts).toBe(0);
+  });
+});
+
 describe("worktree probe", () => {
   beforeEach(() => {
     resetWorktreeProbeCache();

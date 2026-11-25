@@ -37,7 +37,7 @@ export async function registerTasksTool(ctx: Plugin.Context, store: SquadStore) 
           const all = store.listTasks(args.mission_id);
           const tasks = all.filter((task) => (args.status ? task.status === args.status : true));
           const attention = all
-            .filter((task) => ["failed", "escalated", "cancelled"].includes(task.status))
+            .filter((task) => ["failed", "escalated", "cancelled", "blocked"].includes(task.status))
             .map((task) => ({ id: task.id, status: task.status, attempts: task.attempts }));
           return ok({
             mission_id: args.mission_id,

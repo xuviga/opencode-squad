@@ -253,6 +253,10 @@ export class SquadStore {
     return this.tasks.failTask(missionID, taskID, reason);
   }
 
+  blockTask(missionID: string, taskID: string, reason: string): Task {
+    return this.tasks.blockTask(missionID, taskID, reason);
+  }
+
   countTasks(missionID?: string): number {
     return this.tasks.countTasks(missionID);
   }
